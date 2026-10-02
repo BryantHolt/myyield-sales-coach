@@ -836,7 +836,7 @@ function show(id){
 // - on the voice page (?relay=1, opened from Apps Script so the mic works): messages to the Apps Script tab, which runs them
 const GAS = typeof google !== "undefined" && !!(google.script && google.script.run);
 const RELAY = !GAS && /[?&]relay=1/.test(location.search);
-const APP_VERSION = "202610021342"; // stamped by appsscript/build.mjs
+const APP_VERSION = "202610021944"; // stamped by appsscript/build.mjs
 // The version in the address makes phones load a fresh copy instead of GitHub's 10-minute cache.
 const VOICE_PAGE = "https://bryantholt.github.io/myyield-sales-coach/?relay=1&v=" + APP_VERSION;
 const VOICE_ORIGIN = "https://bryantholt.github.io";
@@ -1627,6 +1627,7 @@ async function startCall(){
 // The server hands out a one-time pass with his instructions locked in; the turn-by-turn call is the fallback.
 const LIVE_WS = "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContentConstrained?access_token=";
 const LIVE_WORKLET = `class Cap extends AudioWorkletProcessor{process(i){const c=i[0]&&i[0][0];if(c)this.port.postMessage(c.slice(0));return true}}registerProcessor("sc-cap",Cap);`;
+const LIVE_ECHO_GATE = 0.05; // loudness (0-1) the rep must beat to talk over the farmer
 const live = { on: false, ws: null, ctx: null, stream: null, node: null, nextT: 0, sources: [], muted: false, buf: [], ui: null, farmerOpen: false };
 const liveWanted = () => store.get("sc_live") !== "off";
 // Report live-voice problems to the server so they can be diagnosed without the phone in hand.
@@ -1663,6 +1664,11 @@ function liveMic(frame){
     live.buf.push(Math.max(-1, Math.min(1, sum / Math.max(1, b - a))));
   }
   if (live.buf.length < 1600) return;
+  // Echo guard: while his voice is playing (and just after), only let through sound that's clearly the rep,
+  // louder than speaker leak. Quiet audio goes out as silence, so he can't hear himself as "the rep".
+  const playing = live.nextT > live.ctx.currentTime - 0.35;
+  const rms = Math.sqrt(live.buf.reduce((n, v) => n + v * v, 0) / live.buf.length);
+  if (playing && rms < LIVE_ECHO_GATE) live.buf.fill(0);
   const pcm = new Int16Array(live.buf.length); live.buf.forEach((v, i) => { pcm[i] = v < 0 ? v * 32768 : v * 32767; }); live.buf = [];
   const bytes = new Uint8Array(pcm.buffer); let bin = ""; for (let i = 0; i < bytes.length; i += 8192) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 8192));
   live.ws.send(JSON.stringify({ realtimeInput: { audio: { data: btoa(bin), mimeType: "audio/pcm;rate=16000" } } }));
