@@ -783,7 +783,7 @@ function show(id){
 // - on the voice page (?relay=1, opened from Apps Script so the mic works): messages to the Apps Script tab, which runs them
 const GAS = typeof google !== "undefined" && !!(google.script && google.script.run);
 const RELAY = !GAS && /[?&]relay=1/.test(location.search);
-const APP_VERSION = "202610021107"; // stamped by appsscript/build.mjs
+const APP_VERSION = "202610021133"; // stamped by appsscript/build.mjs
 // The version in the address makes phones load a fresh copy instead of GitHub's 10-minute cache.
 const VOICE_PAGE = "https://bryantholt.github.io/myyield-sales-coach/?relay=1&v=" + APP_VERSION;
 const VOICE_ORIGIN = "https://bryantholt.github.io";
@@ -876,6 +876,9 @@ function stopSpeaking(){ speakSeq++; try { player.pause(); } catch {} if ("speec
 function browserSay(text){ return new Promise((resolve)=>{ if (!("speechSynthesis" in window)) return resolve();
   const u = new SpeechSynthesisUtterance(String(text).replace(/^Coach:\s*/i,"Coach says: "));
   if (voice) u.voice = voice; u.rate = 1.02; u.onend = u.onerror = () => resolve(); speechSynthesis.speak(u); }); }
+// iPhones drop to quiet "call" audio once the mic has been used. Safari lets the page say which mode it needs:
+// "playback" while the farmer talks (full speaker volume), "play-and-record" only while the rep talks. Other phones ignore this.
+function audioMode(type){ try { if (navigator.audioSession) navigator.audioSession.type = type; } catch {} }
 // audio: a voice clip the server already made (a farmer turn comes back with its voice), so there's no second trip.
 async function say(text, role, audio){
   const my = ++speakSeq; text = String(text || "").trim();
@@ -884,6 +887,7 @@ async function say(text, role, audio){
   if (!text) { try { player.src = "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA="; await player.play(); } catch {} return; } // unlocks audio on phones
   role = role || (/^Coach:/i.test(text) ? "coach" : "farmer");
   if (role === "coach") text = text.replace(/^Coach:\s*/i, "");
+  audioMode("playback");
   try {
     if (!audio){
       const r = await api("/api/tts", { text, role });
@@ -918,6 +922,7 @@ function startListening(btn, done, interim, silenceMs, keep){
   stopSpeaking();
   // Phones (iPhone especially) keep the speaker in "playback" after the farmer talks, which leaves the mic deaf. Release it fully.
   try { player.removeAttribute("src"); player.load(); } catch {}
+  audioMode("play-and-record");
   micBtn = btn; onHeard = done; onInterim = interim; endAfter = silenceMs || 0;
   if (!keep) heardBase = "";
   heardNow = ""; wantOn = true; sendOnEnd = false;
@@ -962,6 +967,7 @@ async function micBlockedWhy(){
   }
 }
 function finishListening(){
+  audioMode("playback");
   listening = false; recog = null; clearTimeout(quietT); micBtn && micBtn.classList.remove("on");
   const text = heardText(); const send = sendOnEnd; heardBase = ""; heardNow = "";
   if (send && onHeard) onHeard(text); // empty text tells the screen nothing was heard
@@ -971,7 +977,7 @@ function stopListening(mode){
   clearTimeout(quietT);
   if (!listening) return;
   wantOn = false;
-  if (mode === "pause"){ const keepIt = heardText(); listening = false; const r = recog; recog = null; micBtn && micBtn.classList.remove("on"); try { r && r.stop(); } catch {} heardBase = keepIt; heardNow = ""; return; }
+  if (mode === "pause"){ audioMode("playback"); const keepIt = heardText(); listening = false; const r = recog; recog = null; micBtn && micBtn.classList.remove("on"); try { r && r.stop(); } catch {} heardBase = keepIt; heardNow = ""; return; }
   sendOnEnd = !!mode;
   if (!mode){ heardBase = ""; heardNow = ""; }
   const r = recog;
