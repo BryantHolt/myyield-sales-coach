@@ -521,9 +521,11 @@ h1,h2,h3,.q,.unit h2,h3.section{color:var(--char);letter-spacing:-.02em}
 
     <div class="wrap" id="tab-practice" hidden>
       <h3 class="section">Practice call</h3>
-      <p class="sub">A full call with a farmer. Ask good questions, handle his pushback, and get graded.</p>
+      <p class="sub">A full call. Ask good questions, handle his pushback, and get graded.</p>
       <div class="card">
-        <div style="font-weight:800">Who do you want to call?</div>
+        <div style="font-weight:800">Which play?</div>
+        <div class="pills" id="plays"></div>
+        <div style="font-weight:800;margin-top:16px">Who do you want to call?</div>
         <div class="pills" id="farmers"></div>
         <div style="font-weight:800;margin-top:16px">How tough?</div>
         <div class="pills" id="tough"></div>
@@ -611,12 +613,7 @@ h1,h2,h3,.q,.unit h2,h3.section{color:var(--char);letter-spacing:-.02em}
     </div>
     <div class="card">
       <div style="font-weight:800;margin-bottom:6px">Your mission</div>
-      <ul class="list" style="color:var(--ink-2)">
-        <li>Find out how he handles seed treatment today</li>
-        <li>Uncover what's really worrying him</li>
-        <li>Handle his pushback with the four steps</li>
-        <li>Get a specific next step</li>
-      </ul>
+      <ul class="list" style="color:var(--ink-2)" id="brief-mission"></ul>
       <p class="sub" style="margin-top:10px" id="brief-tough"></p>
     </div>
   </div>
@@ -837,7 +834,7 @@ function show(id){
 // - on the voice page (?relay=1, opened from Apps Script so the mic works): messages to the Apps Script tab, which runs them
 const GAS = typeof google !== "undefined" && !!(google.script && google.script.run);
 const RELAY = !GAS && /[?&]relay=1/.test(location.search);
-const APP_VERSION = "202610021219"; // stamped by appsscript/build.mjs
+const APP_VERSION = "202610021235"; // stamped by appsscript/build.mjs
 // The version in the address makes phones load a fresh copy instead of GitHub's 10-minute cache.
 const VOICE_PAGE = "https://bryantholt.github.io/myyield-sales-coach/?relay=1&v=" + APP_VERSION;
 const VOICE_ORIGIN = "https://bryantholt.github.io";
@@ -952,7 +949,7 @@ async function say(text, role, audio){
     // A farmer turn can come back as one clip per sentence (made at the same time, so he starts sooner).
     for (const clip of Array.isArray(audio) ? audio : [audio]){
       if (my !== speakSeq) return;
-      player.src = `data:audio/wav;base64,${clip}`;
+      player.src = `data:audio/${clip.startsWith("UklGR") ? "wav" : "mpeg"};base64,${clip}`; // WAV clips start "RIFF"; the rest are MP3
       await new Promise((resolve) => { endSpeak = resolve; player.onended = player.onerror = resolve; player.play().then(() => { audioUnlocked = true; }, resolve); });
     }
   } catch { if (my === speakSeq) await new Promise((resolve) => { endSpeak = resolve; browserSay(text).then(resolve); }); }
@@ -1143,7 +1140,7 @@ function showNodeCard(n, u, i){
   $("node-sheet").hidden = false;
   const close = () => { $("node-sheet").hidden = true; };
   if ($("nc-go")) $("nc-go").onclick = () => { close();
-    if (n.kind === "checkpoint"){ state.checkpoint = true; state.farmerId = "surprise"; state.toughness = "typical"; getBriefing(); }
+    if (n.kind === "checkpoint"){ state.checkpoint = true; state.callPlay = u.id; state.farmerId = "surprise"; state.toughness = "typical"; getBriefing(); }
     else openLesson(n.id); };
   if ($("nc-review")) $("nc-review").onclick = async () => { close();
     const h = state.history || (await api("/api/history")).items;
@@ -1227,7 +1224,9 @@ function pills(el, options, key){
     b.setAttribute("aria-pressed", String(state[key]===o.id));
     b.onclick = () => { state[key]=o.id; for (const c of el.children) c.setAttribute("aria-pressed", String(c===b)); }; el.appendChild(b); }
 }
-function renderPractice({ farmers, toughness }){
+function renderPractice({ farmers, toughness, plays }){
+  if (!state.callPlay) state.callPlay = "play1";
+  if (plays) pills($("plays"), plays.map((p) => ({ id: p.id, label: p.short })), "callPlay");
   pills($("farmers"), [{ id:"surprise", label:"Surprise me" }, ...farmers], "farmerId");
   pills($("tough"), toughness.map((t)=>({ id:t, label:t[0].toUpperCase()+t.slice(1) })), "toughness");
   const s = state.me, pct = Math.min(1, s.weekCalls / s.weeklyGoal);
@@ -1406,7 +1405,7 @@ function sceneCard(sc, big){
   if (!sc) return "";
   const f = (ic, t) => `<li>${icon(ic)}<span>${esc(t)}</span></li>`;
   return `<div class="scene">${Art.farmer(sc.name, big ? 84 : 64)}<div><div class="kicker" style="margin:0">Your grower</div><div class="who">${esc(sc.name)}</div><ul class="facts">
-    ${f("pin", sc.place)}${f("grid", Number(sc.acres).toLocaleString("en-US") + " acres")}${f("sprout", sc.crops)}${f("mega", sc.lead)}${f("home", "Talking " + sc.setting)}</ul></div></div>`;
+    ${f("pin", sc.place)}${f("grid", sc.growers ? `Serves about ${sc.growers} growers` : Number(sc.acres).toLocaleString("en-US") + " acres")}${f("sprout", sc.crops)}${f("mega", sc.lead)}${f("home", "Talking " + sc.setting)}</ul></div></div>`;
 }
 
 function feedback(good, title, html){
@@ -1471,11 +1470,13 @@ $("done-review").onclick = () => { stopSpeaking(); openHistory(state.lastLessonI
 async function getBriefing(){
   $("setup-err").textContent = "";
   try {
-    const r = await api("/api/start", { farmerId: state.farmerId, toughness: state.toughness });
+    const r = await api("/api/start", { farmerId: state.farmerId, toughness: state.toughness, playId: state.callPlay || "play1" });
+    state.callPlayName = r.play ? `${r.play.name}: ${r.play.short}` : "";
+    $("brief-mission").innerHTML = ((r.play && r.play.mission) || []).map((m) => `<li>${esc(m)}</li>`).join("");
     state.rollToken = r.rollToken; state.farmerName = r.farmerName; state.scene = r.scene;
     // Get the farmer's first line (and voice) ready while the rep reads the briefing.
     state.firstTurn = api("/api/turn", { rollToken: r.rollToken, transcript: [], voice: true }).catch(() => null);
-    $("brief-kicker").textContent = state.checkpoint ? "Checkpoint call · score 70+ to pass" : "Your call";
+    $("brief-kicker").textContent = (state.checkpoint ? "Checkpoint call · score 70+ to pass · " : "") + (r.play ? r.play.name : "Your call");
     $("brief-name").innerHTML = "";
     $("brief-text").innerHTML = sceneCard(r.scene, true) + `<p style="margin:6px 0 0">${esc(r.briefing)}</p>`;
     $("brief-tough").textContent = `He'll be ${r.toughness}. Say "coach me" any time for a quick tip.`;
@@ -1631,7 +1632,7 @@ $("end-yes").onclick = async () => {
 
 function renderResults({ overall, grade, game, transcript, scene, at, checkpoint, points }, review){
   state.reviewing = !!review;
-  $("res-farmer").textContent = ((game && game.checkpoint) || checkpoint ? "Checkpoint · " : "") + "Call with " + state.farmerName + (review && at ? " · " + when(at) : "");
+  $("res-farmer").textContent = ((game && game.checkpoint) || checkpoint ? "Checkpoint · " : "") + "Call with " + state.farmerName + (review && at ? " · " + when(at) : "") + (!review && state.callPlayName ? " · " + state.callPlayName : "");
   $("again-btn").hidden = !!review; $("res-done").textContent = review ? "Back" : "Done";
   $("res-log").innerHTML = (transcript || []).map((m) => `<div class="msg ${m.role==="rep" ? "rep" : isCoach(m.text) ? "farmer coach" : "farmer"}"><span class="who">${m.role==="rep" ? "You" : isCoach(m.text) ? "Coach" : esc(state.farmerName.split(" ")[0])}</span>${esc(m.text.replace(/^Coach:\s*/i,""))}</div>`).join("");
   $("res-scene-card").hidden = !(review && scene && scene.name);
