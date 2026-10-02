@@ -834,7 +834,7 @@ function show(id){
 // - on the voice page (?relay=1, opened from Apps Script so the mic works): messages to the Apps Script tab, which runs them
 const GAS = typeof google !== "undefined" && !!(google.script && google.script.run);
 const RELAY = !GAS && /[?&]relay=1/.test(location.search);
-const APP_VERSION = "202610021235"; // stamped by appsscript/build.mjs
+const APP_VERSION = "202610021246"; // stamped by appsscript/build.mjs
 // The version in the address makes phones load a fresh copy instead of GitHub's 10-minute cache.
 const VOICE_PAGE = "https://bryantholt.github.io/myyield-sales-coach/?relay=1&v=" + APP_VERSION;
 const VOICE_ORIGIN = "https://bryantholt.github.io";
@@ -855,13 +855,14 @@ if (RELAY) window.addEventListener("message", (e) => {
   if (e.data.t === "sc-reply" && relayWait[e.data.id]){ const done = relayWait[e.data.id]; delete relayWait[e.data.id]; done(e.data.raw); }
 });
 // The Apps Script tab answers the voice page, only for the coach's own requests and only from the voice page's address.
-const RELAY_ROUTES = ["/api/guide-audio","/api/whoami","/api/login","/api/me","/api/path","/api/start","/api/turn","/api/say","/api/lesson","/api/grade","/api/history","/api/tts"];
+// Any coach request except Gabe's report page, so an Apps Script tab opened before an update still passes along new features.
+const RELAY_ALLOWED = (route) => /^\/api\/[a-z-]+$/.test(route) && route !== "/api/report";
 if (GAS) window.addEventListener("message", (e) => {
   if (e.origin !== VOICE_ORIGIN || !e.data) return;
   if (e.data.t === "sc-ready") return e.source.postMessage({ t: "sc-hello" }, e.origin);
   if (e.data.t !== "sc-call") return;
   const reply = (raw) => e.source.postMessage({ t: "sc-reply", id: e.data.id, raw }, e.origin);
-  if (!RELAY_ROUTES.includes(String(e.data.route || "").split("?")[0])) return reply(JSON.stringify({ ok: false, error: "Not allowed." }));
+  if (!RELAY_ALLOWED(String(e.data.route || "").split("?")[0])) return reply(JSON.stringify({ ok: false, error: "Not allowed." }));
   google.script.run.withSuccessHandler(reply).withFailureHandler(() => reply(JSON.stringify({ ok: false, error: "Couldn't reach the coach. Check your connection." })))
     .api(e.data.route, e.data.data === undefined ? null : e.data.data);
 });
@@ -1171,6 +1172,11 @@ async function playGuide(){
   const u = state.path.units[state.guideUnit];
   const btn = $("guide-play");
   if (guidePlaying){ guidePlaying = false; player.pause(); btn.innerHTML = icon("mic") + "Resume"; return; }
+  // Start the player on this tap (phones only allow sound that starts from a tap), then load the recording into it.
+  stopSpeaking();
+  if (!guideAudio || guideAudio.unit !== u.id || player.src !== guideAudio.src){
+    try { player.src = SILENT_WAV; const p = player.play(); if (p) p.catch(() => {}); } catch {}
+  }
   if (!guideAudio || guideAudio.unit !== u.id){
     btn.textContent = "Loading…";
     try {
@@ -1178,8 +1184,11 @@ async function playGuide(){
       guideAudio = { unit: u.id, src: `data:audio/mp3;base64,${r.audio}`, pos: 0 };
     } catch (e) { btn.innerHTML = icon("mic") + "Listen"; return toast(e.message); }
   }
-  stopSpeaking();
-  if (player.src !== guideAudio.src){ player.src = guideAudio.src; player.currentTime = guideAudio.pos || 0; }
+  if (player.src !== guideAudio.src){
+    player.src = guideAudio.src;
+    const at = guideAudio.pos || 0;
+    if (at) player.addEventListener("loadedmetadata", () => { player.currentTime = at; }, { once: true });
+  }
   audioMode("playback");
   const secs = u.guide.map((g) => g.t || 0);
   let lastOn = -1;
