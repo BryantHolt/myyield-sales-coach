@@ -895,7 +895,7 @@ async function say(text, role, audio){
 // One listener shared by lessons and calls. Browsers end speech recognition on their own
 // (a pause, ~60s cap, a network blip), so we quietly restart it and keep everything heard so far.
 // done(text) fires only when the rep stops: tapping the mic or "Done", or, in a call, a real pause.
-let recog = null, listening = false, micBtn = null, onHeard = null, onInterim = null;
+let recog = null, listening = false, micBtn = null, onHeard = null, onInterim = null, onMicOn = null;
 let heardBase = "", heardNow = "", wantOn = false, sendOnEnd = false, endAfter = 0, quietT = null;
 const heardText = () => (heardBase + " " + heardNow).replace(/\s+/g, " ").trim();
 function startListening(btn, done, interim, silenceMs, keep){
@@ -914,7 +914,12 @@ function openRecog(){
     for (let i=0;i<e.results.length;i++) t += e.results[i][0].transcript + " ";
     heardNow = t; onInterim && onInterim(heardText());
     if (endAfter){ clearTimeout(quietT); if (heardText().split(" ").length >= 3) quietT = setTimeout(()=>stopListening(true), endAfter); } };
-  r.onerror = (e) => { if (e.error === "not-allowed" || e.error === "service-not-allowed"){ wantOn = false; micBlockedWhy().then((why) => onInterim && onInterim(heardText(), "The mic is blocked here (" + why + "). " + KEYBOARD_TIP)); } };
+  r.onstart = () => { if (r === recog && onMicOn) onMicOn(); };
+  r.onerror = (e) => {
+    if (e.error === "not-allowed" || e.error === "service-not-allowed"){ wantOn = false; micBlockedWhy().then((why) => onInterim && onInterim(heardText(), "The mic is blocked here (" + why + "). " + KEYBOARD_TIP)); }
+    else if (e.error === "audio-capture" || e.error === "network" || e.error === "language-not-supported"){
+      wantOn = false; onInterim && onInterim(heardText(), `Mic problem (${e.error}). Try again, or ` + KEYBOARD_TIP.charAt(0).toLowerCase() + KEYBOARD_TIP.slice(1)); }
+  };
   r.onend = () => { if (r !== recog) return;
     heardBase = heardText(); heardNow = "";
     if (wantOn){ setTimeout(()=>{ if (wantOn && r === recog) { try { openRecog(); } catch { finishListening(); } } }, 120); return; }
@@ -934,7 +939,7 @@ async function micBlockedWhy(){
 function finishListening(){
   listening = false; recog = null; clearTimeout(quietT); micBtn && micBtn.classList.remove("on");
   const text = heardText(); const send = sendOnEnd; heardBase = ""; heardNow = "";
-  if (send && text && onHeard) onHeard(text);
+  if (send && onHeard) onHeard(text); // empty text tells the screen nothing was heard
 }
 // mode: true = send what was heard, false = throw it away, "pause" = stop but keep it for later.
 function stopListening(mode){
@@ -1164,9 +1169,11 @@ function renderExercise(){
     ta.oninput = () => { L.said = ta.value; setCheck("Check", ta.value.trim().split(/\s+/).length >= 4); };
     $("say-mic").onclick = () => {
       if (listening) { stopListening(true); return; }
-      const ok = startListening($("say-mic"), (t)=>{ ta.value = t; ta.oninput(); $("say-hint").textContent = "Got it. Edit if you need to, then check."; },
+      onMicOn = () => { $("say-hint").textContent = "Listening… tap again when you're done"; };
+      const ok = startListening($("say-mic"), (t)=>{ if (!t){ $("say-hint").textContent = "I didn't hear anything. Tap the mic and try again, or type."; return; }
+          ta.value = t; ta.oninput(); $("say-hint").textContent = "Got it. Edit if you need to, then check."; },
         (t, warn)=>{ if (warn){ $("say-hint").textContent = warn; ta.focus(); } else { ta.value = t; } }, false);
-      if (ok) $("say-hint").textContent = "Listening… tap again when you're done";
+      if (ok) $("say-hint").textContent = "Starting the mic…";
       else { $("say-hint").textContent = KEYBOARD_TIP; ta.focus(); }
     };
     setCheck("Check", false);
@@ -1269,7 +1276,8 @@ function caption(text, you){ const c = $("caption"); c.textContent = text || "";
 function phase(p){
   state.phase = p;
   $("portrait").className = "portrait" + (p === "farmer" ? " talking" : p === "thinking" ? " thinking" : "");
-  $("done-talk").hidden = p !== "you";
+  $("done-talk").hidden = p !== "you" && p !== "ready";
+  $("done-talk").className = "btn donebtn " + (p === "ready" ? "btn-primary" : "btn-ok");
   if (p !== "you") $("s-call").classList.remove("hearing");
 }
 const first = () => state.farmerName.split(" ")[0];
@@ -1296,21 +1304,27 @@ async function farmerTurn(){
 function sendRep(text){
   text = (text||"").trim();
   if (state.ended) return;
-  if (!text){ setStatus("Didn't catch that. Keep going.", "you"); return callListen(); }
+  if (!text){ callListen(); return setStatus(ON_PHONE ? "I didn't hear anything. Tap to talk and try again." : "Didn't catch that. Keep going.", "you"); }
   if (state.busy) return;
   state.transcript.push({ role:"rep", text }); addMsg("rep", text); farmerTurn();
 }
-function callListen(keep){
+// Phones only start the mic from a tap, so on a phone each turn starts with "Tap to talk".
+function callListen(keep, tapped){
   if (state.busy || state.ended) return;
+  if (ON_PHONE && !tapped && !state.muted && !state.typing){
+    phase("ready"); $("done-talk").innerHTML = icon("mic") + "Tap to talk"; state.retry = false;
+    return setStatus("Your turn. Tap to talk.", "you");
+  }
   if (state.muted){ phase("muted"); setStatus("You're muted. Tap the mic to talk.", "muted"); return; }
   if (state.typing){ phase("idle"); setStatus(Recog ? "Your turn. Type below." : "Your turn. " + KEYBOARD_TIP, "you"); return; }
   phase("you"); $("done-talk").textContent = "I'm done talking"; state.retry = false;
+  onMicOn = () => setStatus("Listening. Talk now.", "you");
   const ok = startListening(null, sendRep, (t, warn) => {
     if (warn){ openTyping(true); return setStatus(warn, "err"); }
     $("s-call").classList.toggle("hearing", !!t); if (t) caption(t, true);
   }, 2800, keep);
   if (!ok){ setStatus("Your turn. " + KEYBOARD_TIP, "you"); return openTyping(true); }
-  setStatus("Your turn. I'm listening.", "you"); // his last line stays up until you start talking
+  setStatus("Starting the mic…", "you"); // his last line stays up until you start talking
 }
 function openTyping(on){
   state.typing = on; $("typerow").hidden = !on; $("kb-btn").setAttribute("aria-pressed", String(on));
@@ -1322,15 +1336,20 @@ $("typed").addEventListener("keydown", (e)=>{ if (e.key === "Enter") sendTyped()
 $("typed-send").onclick = sendTyped;
 $("kb-btn").onclick = () => openTyping(!state.typing);
 $("talk-btn").onclick = () => { if (state.busy || state.phase === "farmer") return; openTyping(false); };
-$("done-talk").onclick = () => { if (state.retry){ state.retry = false; $("done-talk").textContent = "I'm done talking"; return farmerTurn(); } stopListening(true); };
+$("done-talk").onclick = () => {
+  if (state.retry){ state.retry = false; $("done-talk").textContent = "I'm done talking"; return farmerTurn(); }
+  if (state.phase === "ready") return callListen(false, true);
+  if (!listening){ sendRep(""); return; }
+  stopListening(true);
+};
 // Tap the farmer to cut in while he's talking.
-$("portrait").onclick = () => { if (state.phase === "farmer"){ phase("idle"); stopSpeaking(); callListen(); } };
+$("portrait").onclick = () => { if (state.phase === "farmer"){ phase("idle"); stopSpeaking(); callListen(false, true); } };
 $("mute-btn").onclick = () => {
   state.muted = !state.muted;
   $("mute-btn").setAttribute("aria-pressed", String(state.muted));
   $("mute-btn").innerHTML = icon(state.muted ? "micoff" : "mic"); $("mute-lbl").textContent = state.muted ? "Unmute" : "Mute";
   if (state.muted){ if (listening) { stopListening("pause"); phase("muted"); setStatus("You're muted. Tap the mic to talk.", "muted"); } }
-  else if (!state.busy && state.phase !== "farmer") callListen(true);
+  else if (!state.busy && state.phase !== "farmer") callListen(true, true);
 };
 $("coach-btn").onclick = () => {
   if (state.busy || state.ended) return toast("Hang on, he's still answering.");
