@@ -836,7 +836,7 @@ function show(id){
 // - on the voice page (?relay=1, opened from Apps Script so the mic works): messages to the Apps Script tab, which runs them
 const GAS = typeof google !== "undefined" && !!(google.script && google.script.run);
 const RELAY = !GAS && /[?&]relay=1/.test(location.search);
-const APP_VERSION = "202610021336"; // stamped by appsscript/build.mjs
+const APP_VERSION = "202610021342"; // stamped by appsscript/build.mjs
 // The version in the address makes phones load a fresh copy instead of GitHub's 10-minute cache.
 const VOICE_PAGE = "https://bryantholt.github.io/myyield-sales-coach/?relay=1&v=" + APP_VERSION;
 const VOICE_ORIGIN = "https://bryantholt.github.io";
@@ -1684,10 +1684,12 @@ function stopLive(){
 // Called right from the "Start the call" tap: the audio and mic must start on the tap itself.
 async function startLive(){
   const step = (name, p) => Promise.resolve(p).catch((e) => { throw new Error(`${name}: ${(e && (e.message || e.name)) || e}`); });
+  // iPhones refuse the mic while the page is in "playback" mode (set for the briefing voice), so switch first.
+  stopSpeaking();
+  audioMode("play-and-record");
   live.ctx = new (window.AudioContext || window.webkitAudioContext)();
   live.ctx.resume();
   const micP = navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
-  audioMode("play-and-record");
   setStatus("Connecting…");
   const [pass, stream] = await Promise.all([step("pass", api("/api/live", { rollToken: state.rollToken })), step("mic", micP)]);
   if (state.ended) { stream.getTracks().forEach((t) => t.stop()); return; }
