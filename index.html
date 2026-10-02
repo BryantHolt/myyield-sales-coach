@@ -1429,11 +1429,9 @@ if (GAS){
   // Apps Script's frame switches the mic off, so the app opens in its own tab and this tab relays for it.
   $("launch-art").innerHTML = Art.mascot("cheer", 96);
   show("s-launch");
-  let coachTab = null;
   $("launch-btn").onclick = () => {
-    // Reuse the coach tab if it's still open; otherwise open a fresh one (a closed named tab can't be reopened on some phones).
-    if (coachTab && !coachTab.closed){ try { coachTab.focus(); return; } catch {} }
-    const w = coachTab = window.open(VOICE_PAGE, "_blank");
+    // Always a fresh tab: phones often can't switch to (or reopen) an earlier one. Extra coach tabs are harmless.
+    const w = window.open(VOICE_PAGE, "_blank");
     $("launch-msg").textContent = w ? "Sales Coach is open in another tab. Keep this one open." : "Your browser blocked the new tab. Allow pop-ups for this page, then tap again.";
     $("launch-btn").textContent = "Open it again";
   };
