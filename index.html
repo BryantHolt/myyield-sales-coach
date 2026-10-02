@@ -224,6 +224,15 @@ textarea.said:focus{border-color:var(--blue)}
 .confetti i{position:absolute;top:-12px;width:9px;height:14px;border-radius:2px;animation:fall 1.8s ease-in forwards}
 @keyframes fall{to{transform:translateY(105vh) rotate(540deg);opacity:.9}}
 
+/* Unit picker: every unit is open */
+.unitpicks{display:flex;gap:8px;overflow-x:auto;padding:14px 0 4px;margin:0 -16px;padding-left:16px;padding-right:16px;scrollbar-width:none}
+.unitpicks::-webkit-scrollbar{display:none}
+.unitpick{flex:none;display:flex;flex-direction:column;align-items:flex-start;gap:1px;padding:9px 12px;border-radius:10px;border:1px solid var(--line);background:#fff;text-align:left;min-width:104px}
+.unitpick b{font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--blue)}
+.unitpick span{font-weight:800;font-size:14px;color:var(--char)}
+.unitpick small{font-size:12px;color:var(--muted);font-weight:600}
+.unitsec{scroll-margin-top:72px}
+
 /* Call: a phone call, not a chat */
 .call{background:linear-gradient(180deg,var(--blue-50) 0%,var(--card) 55%)}
 .callbar{display:flex;align-items:center;justify-content:space-between;height:56px}
@@ -469,14 +478,8 @@ h1,h2,h3,.q,.unit h2,h3.section{color:var(--char);letter-spacing:-.02em}
 
   <main class="home">
     <div class="wrap" id="tab-learn">
-      <div class="unit">
-        <div class="eyebrow" id="unit-eyebrow">Unit 1</div>
-        <h2 id="unit-title">Play 1</h2>
-        <p id="unit-sub"></p>
-        <div class="prog"><span id="unit-prog" style="width:0"></span></div>
-        <div class="art" id="unit-art"></div>
-      </div>
-      <div class="path" id="path"></div>
+      <div class="unitpicks" id="unit-picks"></div>
+      <div id="units"></div>
     </div>
 
     <div class="wrap" id="tab-practice" hidden>
@@ -780,7 +783,7 @@ function show(id){
 // - on the voice page (?relay=1, opened from Apps Script so the mic works): messages to the Apps Script tab, which runs them
 const GAS = typeof google !== "undefined" && !!(google.script && google.script.run);
 const RELAY = !GAS && /[?&]relay=1/.test(location.search);
-const APP_VERSION = "202610021056"; // stamped by appsscript/build.mjs
+const APP_VERSION = "202610021107"; // stamped by appsscript/build.mjs
 // The version in the address makes phones load a fresh copy instead of GitHub's 10-minute cache.
 const VOICE_PAGE = "https://bryantholt.github.io/myyield-sales-coach/?relay=1&v=" + APP_VERSION;
 const VOICE_ORIGIN = "https://bryantholt.github.io";
@@ -1001,15 +1004,30 @@ function renderChips(){
 }
 
 const OFFSETS = [0, 56, 84, 56, 0, -56, -84, -56];
+// Every unit is open (pick any); inside a unit the lessons unlock in order.
 function renderPath(){
-  const p = state.path;
-  $("unit-eyebrow").textContent = "Unit 1"; $("unit-title").textContent = p.unit.title; $("unit-sub").textContent = p.unit.subtitle;
-  const done = p.lessons.filter((l)=>l.state==="done").length + (p.checkpoint.state==="done"?1:0);
-  $("unit-prog").style.width = (done / (p.lessons.length+1) * 100) + "%";
-  const box = $("path"); box.innerHTML = "";
-  const nodes = [...p.lessons.map((l)=>({...l, kind:"lesson"})), { ...p.checkpoint, icon:"trophy", kind:"checkpoint", stars:0 }];
-  $("unit-art").innerHTML = Art.field;
-  const decos = [["barn", 1], ["corn", 3], ["silo", 5], ["tractor", 7]];
+  const units = state.path.units;
+  $("unit-picks").innerHTML = units.map((u, k) => {
+    const done = u.lessons.filter((l) => l.state === "done").length;
+    return `<button class="unitpick" data-k="${k}"><b>Unit ${k + 1}</b><span>${esc(u.short || u.title)}</span><small>${esc(u.title)} · ${done}/${u.lessons.length}</small></button>`;
+  }).join("");
+  for (const b of $("unit-picks").querySelectorAll(".unitpick")) b.onclick = () => $("unit-" + b.dataset.k).scrollIntoView({ block: "start" });
+  const wrap = $("units"); wrap.innerHTML = "";
+  units.forEach((u, k) => {
+    const total = u.lessons.length + (u.checkpoint ? 1 : 0);
+    const done = u.lessons.filter((l) => l.state === "done").length + (u.checkpoint && u.checkpoint.state === "done" ? 1 : 0);
+    const sec = document.createElement("section");
+    sec.id = "unit-" + k; sec.className = "unitsec";
+    sec.innerHTML = `<div class="unit"><div class="eyebrow">Unit ${k + 1}</div><h2>${esc(u.title)}</h2><p>${esc(u.subtitle)}</p>
+      <div class="prog"><span style="width:${(done / total) * 100}%"></span></div><div class="art">${Art.field}</div></div><div class="path"></div>`;
+    wrap.appendChild(sec);
+    renderUnitPath(sec.querySelector(".path"), u, k);
+  });
+}
+function renderUnitPath(box, u, k){
+  const nodes = [...u.lessons.map((l)=>({...l, kind:"lesson"})), ...(u.checkpoint ? [{ ...u.checkpoint, icon:"trophy", kind:"checkpoint", stars:0 }] : [])];
+  const decoSets = [[["barn", 1], ["corn", 3], ["silo", 5], ["tractor", 7]], [["corn", 1], ["silo", 3]], [["tractor", 1], ["barn", 3]]];
+  const decos = decoSets[k % decoSets.length];
   nodes.forEach((n, i) => {
     const el = document.createElement("div");
     el.className = `node ${n.state} ${n.kind==="checkpoint"?"checkpoint":""}`;
@@ -1170,7 +1188,9 @@ function renderExercise(){
   L.checked = false; L.chosen = null; L.order = []; L.said = "";
   const box = $("ex");
   if (ex.type === "choice"){
-    box.innerHTML = `<div class="coachrow">${Art.mascot("think", 76)}<div class="speech"><span class="k">Pick the best answer</span>${esc(ex.prompt)}</div></div><div class="opts">${ex.options.map((o,k)=>`<button class="opt" data-k="${k}">${esc(o)}</button>`).join("")}</div>`;
+    // Shuffle the options so the right answer isn't always in the same spot. data-k keeps the original index.
+    const order = ex.options.map((o,k)=>k).sort(()=>Math.random()-.5);
+    box.innerHTML = `<div class="coachrow">${Art.mascot("think", 76)}<div class="speech"><span class="k">Pick the best answer</span>${esc(ex.prompt)}</div></div><div class="opts">${order.map((k)=>`<button class="opt" data-k="${k}">${esc(ex.options[k])}</button>`).join("")}</div>`;
     for (const b of box.querySelectorAll(".opt")) b.onclick = () => { if (L.checked) return; L.chosen = +b.dataset.k;
       for (const c of box.querySelectorAll(".opt")) c.setAttribute("aria-pressed", String(c===b)); setCheck("Check", true); };
     setCheck("Check", false);
@@ -1226,7 +1246,7 @@ $("check-btn").onclick = async () => {
   }
   if (ex.type === "choice"){
     const right = L.chosen === ex.answer; L.checked = true; L.results.push(right); L.answers[L.i] = { chosen: L.chosen };
-    const opts = $("ex").querySelectorAll(".opt"); opts[ex.answer].classList.add("right"); if (!right) opts[L.chosen].classList.add("wrong");
+    const opt = (k) => $("ex").querySelector(`.opt[data-k="${k}"]`); opt(ex.answer).classList.add("right"); if (!right) opt(L.chosen).classList.add("wrong");
     feedback(right, right ? "Nice!" : "Not quite", `<p>${esc(ex.why)}</p>`);
   } else if (ex.type === "order"){
     const right = L.order.every((k,n)=>k===n); L.checked = true; L.results.push(right); L.answers[L.i] = { order: L.order.slice() };
