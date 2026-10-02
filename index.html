@@ -870,7 +870,8 @@ function stopSpeaking(){ speakSeq++; try { player.pause(); } catch {} if ("speec
 function browserSay(text){ return new Promise((resolve)=>{ if (!("speechSynthesis" in window)) return resolve();
   const u = new SpeechSynthesisUtterance(String(text).replace(/^Coach:\s*/i,"Coach says: "));
   if (voice) u.voice = voice; u.rate = 1.02; u.onend = u.onerror = () => resolve(); speechSynthesis.speak(u); }); }
-async function say(text, role){
+// audio: a voice clip the server already made (a farmer turn comes back with its voice), so there's no second trip.
+async function say(text, role, audio){
   const my = ++speakSeq; text = String(text || "").trim();
   try { player.pause(); } catch {} if ("speechSynthesis" in window) speechSynthesis.cancel();
   if (endSpeak) { const f = endSpeak; endSpeak = null; f(); }
@@ -878,12 +879,14 @@ async function say(text, role){
   role = role || (/^Coach:/i.test(text) ? "coach" : "farmer");
   if (role === "coach") text = text.replace(/^Coach:\s*/i, "");
   try {
-    const r = await api("/api/tts", { text, role });
+    if (!audio){
+      const r = await api("/api/tts", { text, role });
+      if (my !== speakSeq) return;
+      if (!r || !r.audio) throw new Error("no tts");
+      audio = r.audio;
+    }
     if (my !== speakSeq) return;
-    if (!r || !r.audio) throw new Error("no tts");
-    const { audio, mime } = r;
-    if (my !== speakSeq) return;
-    player.src = `data:${mime || "audio/wav"};base64,${audio}`;
+    player.src = `data:audio/wav;base64,${audio}`;
     await new Promise((resolve) => { endSpeak = resolve; player.onended = player.onerror = resolve; player.play().then(() => { audioUnlocked = true; }, resolve); });
   } catch { if (my === speakSeq) await new Promise((resolve) => { endSpeak = resolve; browserSay(text).then(resolve); }); }
   if (my === speakSeq) endSpeak = null;
@@ -1240,6 +1243,8 @@ async function getBriefing(){
   try {
     const r = await api("/api/start", { farmerId: state.farmerId, toughness: state.toughness });
     state.rollToken = r.rollToken; state.farmerName = r.farmerName; state.scene = r.scene;
+    // Get the farmer's first line (and voice) ready while the rep reads the briefing.
+    state.firstTurn = api("/api/turn", { rollToken: r.rollToken, transcript: [], voice: true }).catch(() => null);
     $("brief-kicker").textContent = state.checkpoint ? "Checkpoint call · score 70+ to pass" : "Your call";
     $("brief-name").innerHTML = "";
     $("brief-text").innerHTML = sceneCard(r.scene, true) + `<p style="margin:6px 0 0">${esc(r.briefing)}</p>`;
@@ -1272,12 +1277,15 @@ const first = () => state.farmerName.split(" ")[0];
 async function farmerTurn(){
   state.busy = true; phase("thinking"); setStatus(first() + " is thinking…"); caption("");
   try {
-    const { reply } = await api("/api/turn", { rollToken: state.rollToken, transcript: state.transcript });
+    // The opening line was already fetched while the rep read the briefing.
+    const pre = !state.transcript.length && state.firstTurn ? await state.firstTurn : null;
+    state.firstTurn = null;
+    const { reply, audio } = pre || await api("/api/turn", { rollToken: state.rollToken, transcript: state.transcript, voice: true });
     if (state.ended) return;
     state.transcript.push({ role:"farmer", text: reply }); addMsg("farmer", reply);
     state.busy = false;
     phase("farmer"); setStatus(isCoach(reply) ? "Coach" : first() + " is talking", ""); caption(reply.replace(/^Coach:\s*/i, ""));
-    await say(reply);
+    await say(reply, undefined, audio);
     if (state.ended || state.phase !== "farmer") return;
     callListen();
   } catch (e) {
@@ -1345,7 +1353,7 @@ async function startCall(){
   $("call-meta").textContent = [sc.place, sc.crops].filter(Boolean).join(" · ");
   $("call-sub").textContent = state.checkpoint ? "Checkpoint call" : "Practice call";
   state.callT0 = Date.now(); tick(); clearInterval(state.timer); state.timer = setInterval(tick, 1000);
-  show("s-call"); caption(""); setStatus("Calling…"); await say(""); farmerTurn();
+  show("s-call"); caption(""); setStatus("Calling…"); say(""); farmerTurn();
 }
 
 // Ending always asks first, so a stray tap or a pause never ends the call.
