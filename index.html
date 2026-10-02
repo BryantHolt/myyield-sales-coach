@@ -836,7 +836,7 @@ function show(id){
 // - on the voice page (?relay=1, opened from Apps Script so the mic works): messages to the Apps Script tab, which runs them
 const GAS = typeof google !== "undefined" && !!(google.script && google.script.run);
 const RELAY = !GAS && /[?&]relay=1/.test(location.search);
-const APP_VERSION = "202610021333"; // stamped by appsscript/build.mjs
+const APP_VERSION = "202610021336"; // stamped by appsscript/build.mjs
 // The version in the address makes phones load a fresh copy instead of GitHub's 10-minute cache.
 const VOICE_PAGE = "https://bryantholt.github.io/myyield-sales-coach/?relay=1&v=" + APP_VERSION;
 const VOICE_ORIGIN = "https://bryantholt.github.io";
@@ -1616,7 +1616,7 @@ async function startCall(){
   show("s-call"); caption(""); setStatus("Calling…");
   if (liveAvailable()){
     try { await startLive(); return; }
-    catch (e) { stopLive(); if (state.ended) return; toast("Live voice didn't connect, so this call uses standard voice."); }
+    catch (e) { stopLive(); if (state.ended) return; liveLog("start failed: " + e.message); toast(`Live voice didn't connect (${e.message}), so this call uses standard voice.`); }
   }
   say(""); farmerTurn();
 }
@@ -1629,6 +1629,8 @@ const LIVE_WS = "wss://generativelanguage.googleapis.com/ws/google.ai.generative
 const LIVE_WORKLET = `class Cap extends AudioWorkletProcessor{process(i){const c=i[0]&&i[0][0];if(c)this.port.postMessage(c.slice(0));return true}}registerProcessor("sc-cap",Cap);`;
 const live = { on: false, ws: null, ctx: null, stream: null, node: null, nextT: 0, sources: [], muted: false, buf: [], ui: null, farmerOpen: false };
 const liveWanted = () => store.get("sc_live") !== "off";
+// Report live-voice problems to the server so they can be diagnosed without the phone in hand.
+function liveLog(msg){ try { api("/api/clientlog", { msg: String(msg).slice(0, 300), ua: navigator.userAgent.slice(0, 200), v: APP_VERSION }).catch(() => {}); } catch {} }
 const liveAvailable = () => liveWanted() && !MIC_BLOCKED && !!(window.WebSocket && window.AudioWorkletNode && navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
 
 function liveAdd(role, text){
@@ -1681,26 +1683,35 @@ function stopLive(){
 }
 // Called right from the "Start the call" tap: the audio and mic must start on the tap itself.
 async function startLive(){
+  const step = (name, p) => Promise.resolve(p).catch((e) => { throw new Error(`${name}: ${(e && (e.message || e.name)) || e}`); });
   live.ctx = new (window.AudioContext || window.webkitAudioContext)();
   live.ctx.resume();
-  const micP = navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1 } });
+  const micP = navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
   audioMode("play-and-record");
   setStatus("Connecting…");
-  const [pass, stream] = await Promise.all([api("/api/live", { rollToken: state.rollToken }), micP]);
+  const [pass, stream] = await Promise.all([step("pass", api("/api/live", { rollToken: state.rollToken })), step("mic", micP)]);
   if (state.ended) { stream.getTracks().forEach((t) => t.stop()); return; }
   live.stream = stream;
-  await live.ctx.audioWorklet.addModule(URL.createObjectURL(new Blob([LIVE_WORKLET], { type: "text/javascript" })));
+  if (live.ctx.state !== "running") await step("audio", live.ctx.resume());
   const src = live.ctx.createMediaStreamSource(stream);
-  live.node = new AudioWorkletNode(live.ctx, "sc-cap");
-  const sink = live.ctx.createGain(); sink.gain.value = 0;
-  src.connect(live.node); live.node.connect(sink); sink.connect(live.ctx.destination);
-  live.node.port.onmessage = (e) => liveMic(e.data);
+  const sink = live.ctx.createGain(); sink.gain.value = 0; sink.connect(live.ctx.destination);
+  try {
+    await live.ctx.audioWorklet.addModule(URL.createObjectURL(new Blob([LIVE_WORKLET], { type: "text/javascript" })));
+    live.node = new AudioWorkletNode(live.ctx, "sc-cap");
+    live.node.port.onmessage = (e) => liveMic(e.data);
+  } catch (e) {
+    // Older iPhones: the original (still supported) way to read the mic.
+    live.node = live.ctx.createScriptProcessor(4096, 1, 1);
+    live.node.onaudioprocess = (ev) => liveMic(ev.inputBuffer.getChannelData(0).slice(0));
+    liveLog("worklet fallback: " + (e && e.message));
+  }
+  src.connect(live.node); live.node.connect(sink);
   await new Promise((resolve, reject) => {
     const ws = live.ws = new WebSocket(LIVE_WS + encodeURIComponent(pass.token));
-    setTimeout(() => { if (!live.on) reject(new Error("Live voice took too long to connect.")); }, 12000);
+    setTimeout(() => { if (!live.on) reject(new Error("setup timed out")); }, 12000);
     ws.onopen = () => ws.send(JSON.stringify({ setup: { model: pass.model } }));
-    ws.onerror = () => reject(new Error("Live voice couldn't connect."));
-    ws.onclose = (e) => { if (!live.on) return reject(new Error("Live voice couldn't connect.")); if (!state.ended){ live.on = false; setStatus("The call dropped. End it to get graded, or start a new one.", "err"); } };
+    ws.onerror = () => reject(new Error("socket error"));
+    ws.onclose = (e) => { if (!live.on) return reject(new Error(`socket closed ${e.code} ${e.reason || ""}`.trim())); if (!state.ended){ live.on = false; setStatus("The call dropped. End it to get graded, or start a new one.", "err"); } };
     ws.onmessage = async (ev) => {
       const m = JSON.parse(typeof ev.data === "string" ? ev.data : await ev.data.text());
       if (m.setupComplete){
