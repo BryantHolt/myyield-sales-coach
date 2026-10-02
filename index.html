@@ -249,6 +249,27 @@ textarea.said:focus{border-color:var(--blue)}
 .uback svg.i{width:20px;height:20px}
 .uback:active{background:var(--char);color:#fff}
 
+/* Unit guide and lesson cards */
+.uheadrow{display:flex;justify-content:space-between;gap:8px}
+.guidecard{display:flex;gap:12px;align-items:center;width:100%;text-align:left;margin:12px 0 0;padding:14px;border-radius:12px;background:var(--gold-50);border:1.5px solid var(--gold)}
+.guidecard .gic{width:44px;height:44px;flex:none;border-radius:50%;display:grid;place-items:center;background:var(--char);color:var(--gold)}
+.guidecard b{display:block;color:var(--char);font-size:15px}
+.guidecard small{display:block;color:var(--ink-2);font-size:13px;font-weight:500;margin-top:2px}
+.gsec{background:#fff;border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin:12px 0;transition:border-color .2s,box-shadow .2s}
+.gsec.on{border:2px solid var(--gold);box-shadow:0 0 0 4px var(--gold-50)}
+.gsec h4{margin:0 0 4px;font-size:16px;color:var(--char)}
+.gsec p{margin:0;color:var(--ink-2);font-size:15px;line-height:1.55}
+.qlist{display:flex;flex-direction:column;gap:8px;margin:12px 0}
+.qrow{display:flex;gap:12px;align-items:flex-start;text-align:left;padding:11px 12px;border-radius:10px;border:1px solid var(--line);background:#fff}
+.qrow[disabled]{opacity:.5}
+.qn{width:28px;height:28px;flex:none;border-radius:50%;display:grid;place-items:center;font-weight:800;font-size:13px;background:var(--line-2);color:var(--char)}
+.qrow.ok .qn{background:var(--ok-50);color:var(--ok-d)}
+.qn svg.i{width:16px;height:16px}
+.qt{font-size:14px;font-weight:600;color:var(--char);line-height:1.35}
+.qt small{display:block;font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--blue);margin-bottom:2px}
+.lockmsg{display:flex;gap:8px;align-items:center;color:var(--ink-2);font-weight:600;font-size:14px;background:var(--line-2);border-radius:8px;padding:10px 12px}
+.lockmsg svg.i{width:18px;height:18px}
+
 /* Call: a phone call, not a chat */
 .call{background:linear-gradient(180deg,var(--blue-50) 0%,var(--card) 55%)}
 .callbar{display:flex;align-items:center;justify-content:space-between;height:56px}
@@ -625,6 +646,23 @@ h1,h2,h3,.q,.unit h2,h3.section{color:var(--char);letter-spacing:-.02em}
   </div></div>
 </section>
 
+<div class="scrim" id="node-sheet" hidden><div class="sheet">
+  <div style="display:flex;justify-content:flex-end"><button class="x" id="node-x" aria-label="Close"><svg class="i"><use href="#i-x"/></svg></button></div>
+  <div id="node-body"></div>
+</div></div>
+
+<!-- UNIT GUIDE -->
+<section class="screen" id="s-guide" hidden>
+  <div class="wrap lessontop"><button class="x" id="guide-x" aria-label="Back"><svg class="i"><use href="#i-x"/></svg></button><div style="font-weight:800">Unit guide</div></div>
+  <div class="wrap" style="padding-bottom:140px">
+    <div class="kicker" id="guide-title"></div>
+    <h2 style="margin:4px 0 6px;font-size:24px" id="guide-sub"></h2>
+    <p class="sub">Listen, read, or both. Then start the first lesson.</p>
+    <div id="guide-body"></div>
+  </div>
+  <div class="dock"><div class="wrap"><button class="btn btn-primary" id="guide-play"></button></div></div>
+</section>
+
 <div class="scrim" id="log-sheet" hidden><div class="sheet">
   <div style="display:flex;justify-content:space-between;align-items:center"><h3>Transcript</h3><button class="x" id="log-x" aria-label="Close"><svg class="i"><use href="#i-x"/></svg></button></div>
   <div class="log" id="log"></div>
@@ -789,7 +827,7 @@ const state = { token: store.get("sc_token"), name: store.get("sc_name"), farmer
   me:null, board:null, boardTab:"week", path:null, tab:"learn" };
 
 function show(id){
-  for (const s of ["s-signin","s-launch","s-home","s-lesson","s-done","s-review","s-brief","s-call","s-results"]) $(s).hidden = s !== id;
+  for (const s of ["s-signin","s-launch","s-guide","s-home","s-lesson","s-done","s-review","s-brief","s-call","s-results"]) $(s).hidden = s !== id;
   window.scrollTo(0,0);
 }
 
@@ -799,7 +837,7 @@ function show(id){
 // - on the voice page (?relay=1, opened from Apps Script so the mic works): messages to the Apps Script tab, which runs them
 const GAS = typeof google !== "undefined" && !!(google.script && google.script.run);
 const RELAY = !GAS && /[?&]relay=1/.test(location.search);
-const APP_VERSION = "202610021150"; // stamped by appsscript/build.mjs
+const APP_VERSION = "202610021159"; // stamped by appsscript/build.mjs
 // The version in the address makes phones load a fresh copy instead of GitHub's 10-minute cache.
 const VOICE_PAGE = "https://bryantholt.github.io/myyield-sales-coach/?relay=1&v=" + APP_VERSION;
 const VOICE_ORIGIN = "https://bryantholt.github.io";
@@ -1061,13 +1099,91 @@ function renderUnit(k){
   state.learnView = "unit";
   const u = state.path.units[k], p = unitProgress(u);
   const box = $("learn");
-  box.innerHTML = `<div class="unithead"><button class="uback" id="all-units">${icon("back")}<span>All units</span></button><div class="unit">
+  const heard = store.get("sc_guide_" + u.id);
+  box.innerHTML = `<div class="unithead"><div class="uheadrow"><button class="uback" id="all-units">${icon("back")}<span>All units</span></button>
+      <button class="uback" id="unit-guide">${icon("book")}<span>Unit guide</span></button></div><div class="unit">
       <div class="eyebrow">Unit ${k + 1} · ${esc(u.title)}</div><h2>${esc(u.subtitle)}</h2>
       <div class="prog"><span style="width:${(p.done / p.total) * 100}%"></span></div><div class="art">${Art.field}</div></div></div>
+    ${heard ? "" : `<button class="guidecard" id="guide-card"><span class="gic">${icon("mic")}</span><span><b>New to this play? Start here.</b><small>Listen to the ${guideMinutes(u)}-minute unit guide: what it is, who it's for, and how to pitch it.</small></span></button>`}
     <div class="path"></div>`;
   $("all-units").onclick = () => { renderUnitList(); window.scrollTo(0, 0); };
+  $("unit-guide").onclick = () => openGuide(k);
+  if ($("guide-card")) $("guide-card").onclick = () => openGuide(k);
   renderUnitPath(box.querySelector(".path"), u, k);
 }
+const guideMinutes = (u) => Math.max(1, Math.round(u.guide.reduce((n, g) => n + g.p.split(/\s+/).length, 0) / 150));
+
+// Tapping a lesson circle opens a card (like Duolingo): what's in it, where you are, and what you can do.
+function showNodeCard(n, u, i){
+  const lessonsIn = u.lessons.length;
+  let html = "";
+  if (n.kind === "checkpoint"){
+    html = `<div class="kicker">Checkpoint</div><h3>${esc(n.title)}</h3><p class="sub">A full practice call. Score ${n.passScore || 70}+ to pass the unit.</p>` +
+      (n.state === "locked" ? `<p class="lockmsg">${icon("lock")} Finish every lesson in this unit to unlock it.</p>`
+        : `<button class="btn btn-primary" id="nc-go">${n.state === "done" ? "Take it again" : "Start the call"}</button>`);
+  } else {
+    const prog = (() => { try { return JSON.parse(store.get(progressKey(n.id)) || "null"); } catch { return null; } })();
+    const at = n.state === "current" && prog && Date.now() - prog.at < 864e5 ? prog.i : 0;
+    const rows = n.questions.map((q, k) => {
+      const answered = n.state === "done" || k < at;
+      const open = n.state === "done" || k <= at;
+      const tag = q.type === "say" ? "Say it" : q.type === "order" ? "Put in order" : "Pick one";
+      return `<button class="qrow ${answered ? "ok" : ""}" data-k="${k}" ${open && n.state !== "locked" ? "" : "disabled"}>
+        <span class="qn">${answered ? icon("check") : k + 1}</span><span class="qt"><small>${tag}</small>${esc(q.prompt)}</span></button>`;
+    }).join("");
+    html = `<div class="kicker">Lesson ${i + 1} of ${lessonsIn}</div><h3>${esc(n.title)}</h3>` +
+      (n.state === "locked" ? `<p class="lockmsg">${icon("lock")} Finish “${esc(u.lessons[i - 1] ? u.lessons[i - 1].title : "the lesson before")}” first to unlock this.</p>` : "") +
+      `<div class="qlist">${rows}</div>` +
+      (n.state === "locked" ? "" : n.state === "done"
+        ? `<p class="sub" style="margin:8px 0 0">Tap a question to practice just from there. Practice doesn't change your stars.</p>
+           <div class="row2"><button class="btn btn-ghost" id="nc-review">Review answers</button><button class="btn btn-primary" id="nc-go">Practice again</button></div>`
+        : `<button class="btn btn-primary" id="nc-go">${at ? `Continue (question ${at + 1})` : "Start"}</button>`);
+  }
+  $("node-body").innerHTML = html;
+  $("node-sheet").hidden = false;
+  const close = () => { $("node-sheet").hidden = true; };
+  if ($("nc-go")) $("nc-go").onclick = () => { close();
+    if (n.kind === "checkpoint"){ state.checkpoint = true; state.farmerId = "surprise"; state.toughness = "typical"; getBriefing(); }
+    else openLesson(n.id); };
+  if ($("nc-review")) $("nc-review").onclick = async () => { close();
+    const h = state.history || (await api("/api/history")).items;
+    const last = h.find((x) => x.lessonId === n.id);
+    if (last) openHistory(last.id, "me"); else toast("No saved answers for this lesson yet.");
+  };
+  for (const b of $("node-body").querySelectorAll(".qrow:not([disabled])")) b.onclick = () => { close();
+    // Done lesson: practice from that question (not saved). Current lesson: go back to that question.
+    openLesson(n.id, { start: +b.dataset.k, practice: n.state === "done" }); };
+}
+
+// Unit guide: a short spoken explainer the rep can choose to listen to.
+let guidePlaying = false;
+function openGuide(k){
+  const u = state.path.units[k];
+  store.set("sc_guide_" + u.id, "1");
+  state.guideUnit = k;
+  $("guide-title").textContent = `Unit ${k + 1} · ${u.title}`;
+  $("guide-sub").textContent = u.subtitle;
+  $("guide-body").innerHTML = u.guide.map((g, j) => `<div class="gsec" id="gsec-${j}"><h4>${esc(g.h)}</h4><p>${esc(g.p)}</p></div>`).join("");
+  $("guide-play").innerHTML = icon("mic") + `Listen (${guideMinutes(u)} min)`;
+  show("s-guide");
+}
+async function playGuide(){
+  if (guidePlaying){ guidePlaying = false; stopSpeaking(); $("guide-play").innerHTML = icon("mic") + "Listen again"; return; }
+  const u = state.path.units[state.guideUnit];
+  guidePlaying = true; $("guide-play").textContent = "Pause";
+  // Ask for every section's voice at once, then play them in order as they arrive.
+  const clips = u.guide.map((g) => api("/api/tts", { text: g.h + ". " + g.p, role: "coach" }).catch(() => null));
+  for (let j = 0; j < u.guide.length && guidePlaying; j++){
+    for (const el of document.querySelectorAll(".gsec")) el.classList.toggle("on", el.id === "gsec-" + j);
+    $("gsec-" + j).scrollIntoView({ block: "center", behavior: "smooth" });
+    const r = await clips[j];
+    if (!guidePlaying) break;
+    await say(u.guide[j].h + ". " + u.guide[j].p, "coach", r && r.audio);
+  }
+  for (const el of document.querySelectorAll(".gsec")) el.classList.remove("on");
+  if (guidePlaying){ guidePlaying = false; $("guide-play").innerHTML = icon("mic") + "Listen again"; }
+}
+
 function renderUnitPath(box, u, k){
   const nodes = [...u.lessons.map((l)=>({...l, kind:"lesson"})), ...(u.checkpoint ? [{ ...u.checkpoint, icon:"trophy", kind:"checkpoint", stars:0 }] : [])];
   const decoSets = [[["barn", 1], ["corn", 3], ["silo", 5], ["tractor", 7]], [["corn", 1], ["silo", 3]], [["tractor", 1], ["barn", 3]]];
@@ -1081,11 +1197,7 @@ function renderUnitPath(box, u, k){
       <button class="bubble" aria-label="${esc(n.title)}">${icon(ic)}</button>
       ${n.kind==="lesson" && n.state==="done" ? `<div class="stars">${[1,2,3].map((k)=>`<span style="color:${k<=n.stars?"var(--gold-d)":"var(--line)"}">★</span>`).join("")}</div>` : ""}
       <div class="label">${esc(n.title)}</div>`;
-    el.querySelector(".bubble").onclick = () => {
-      if (n.state==="locked") return;
-      if (n.kind==="checkpoint") { state.checkpoint = true; state.farmerId="surprise"; state.toughness="typical"; getBriefing(); }
-      else openLesson(n.id);
-    };
+    el.querySelector(".bubble").onclick = () => showNodeCard(n, u, i);
     box.appendChild(el);
     const d = decos.find(([, at]) => at === i);
     if (d){ const art=document.createElement("div"); art.className="deco"; art.innerHTML=Art.scenery[d[0]];
@@ -1204,12 +1316,20 @@ let L = null; // { lesson, i, results, chosen, order, said, checked }
 // A lesson only counts once it's finished, but leaving partway keeps your place (on this device, for a day).
 const progressKey = (id) => "sc_lesson_" + (state.name || "") + "_" + id;
 function saveProgress(){
-  if (!L) return;
+  if (!L || L.practice) return;
   store.set(progressKey(L.lesson.id), JSON.stringify({ i: L.i, results: L.results, answers: L.answers, at: Date.now() }));
 }
-async function openLesson(id){
+async function openLesson(id, opts = {}){
   try { const lesson = await api("/api/path?lesson=" + encodeURIComponent(id));
-    L = { lesson, i:0, results:[], answers:[] };
+    L = { lesson, i:0, results:[], answers:[], practice: !!opts.practice };
+    if (opts.start != null){
+      // Jumping to a question: practice keeps nothing; going back in the current lesson keeps the answers before it.
+      let p = null; try { p = JSON.parse(store.get(progressKey(id)) || "null"); } catch {}
+      L.i = Math.min(opts.start, lesson.exercises.length - 1);
+      if (!L.practice && p){ L.results = p.results.slice(0, L.i); L.answers = (p.answers || []).slice(0, L.i); }
+      if (!L.practice && L.results.length !== L.i) L.i = 0;
+      show("s-lesson"); renderExercise(); return;
+    }
     try {
       const p = JSON.parse(store.get(progressKey(id)) || "null");
       if (p && Date.now() - p.at < 864e5 && p.i > 0 && p.i < lesson.exercises.length && p.results.length === p.i){
@@ -1312,6 +1432,7 @@ $("check-btn").onclick = async () => {
 };
 
 async function finishLesson(){
+  if (L.practice){ toast("Practice done. Practice doesn't change your stars."); state.tab = "learn"; return loadHome(); }
   $("lesson-bar").style.width = "100%";
   setCheck("Saving…", false);
   try {
@@ -1533,6 +1654,10 @@ $("signin-btn").onclick = async () => {
 $("code").addEventListener("keydown", (e)=>{ if (e.key==="Enter") $("signin-btn").click(); });
 
 $("signin-art").innerHTML = Art.mascot("happy", 96);
+$("node-x").onclick = () => { $("node-sheet").hidden = true; };
+$("node-sheet").onclick = (e) => { if (e.target.id === "node-sheet") $("node-sheet").hidden = true; };
+$("guide-play").onclick = playGuide;
+$("guide-x").onclick = () => { guidePlaying = false; stopSpeaking(); state.tab = "learn"; show("s-home"); renderPath(); window.scrollTo(0, 0); };
 // The logo goes home: the Units page on Learn.
 $("brand-home").onclick = () => { state.learnView = "units"; setTab("learn"); if (state.path) renderUnitList(); window.scrollTo(0, 0); };
 $("app-version").textContent = "Version " + (APP_VERSION.startsWith("__") ? "local" : APP_VERSION);
