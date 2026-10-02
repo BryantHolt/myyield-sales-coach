@@ -516,6 +516,7 @@ h1,h2,h3,.q,.unit h2,h3.section{color:var(--char);letter-spacing:-.02em}
       <h3 class="section">Badges</h3>
       <div class="badgegrid" id="me-badges"></div>
       <div style="margin:28px 0"><button class="btn btn-ghost" id="signout">Sign out</button></div>
+      <p class="sub" style="text-align:center;font-size:12px" id="app-version"></p>
     </div>
   </main>
 
@@ -779,7 +780,9 @@ function show(id){
 // - on the voice page (?relay=1, opened from Apps Script so the mic works): messages to the Apps Script tab, which runs them
 const GAS = typeof google !== "undefined" && !!(google.script && google.script.run);
 const RELAY = !GAS && /[?&]relay=1/.test(location.search);
-const VOICE_PAGE = "https://bryantholt.github.io/myyield-sales-coach/?relay=1";
+const APP_VERSION = "202610021053"; // stamped by appsscript/build.mjs
+// The version in the address makes phones load a fresh copy instead of GitHub's 10-minute cache.
+const VOICE_PAGE = "https://bryantholt.github.io/myyield-sales-coach/?relay=1&v=" + APP_VERSION;
 const VOICE_ORIGIN = "https://bryantholt.github.io";
 const GAS_PEER = /^https:\/\/n-[a-z0-9-]+-script\.googleusercontent\.com$/;
 let relayPeer = null, relaySeq = 0;
@@ -885,9 +888,12 @@ async function say(text, role, audio){
       if (!r || !r.audio) throw new Error("no tts");
       audio = r.audio;
     }
-    if (my !== speakSeq) return;
-    player.src = `data:audio/wav;base64,${audio}`;
-    await new Promise((resolve) => { endSpeak = resolve; player.onended = player.onerror = resolve; player.play().then(() => { audioUnlocked = true; }, resolve); });
+    // A farmer turn can come back as one clip per sentence (made at the same time, so he starts sooner).
+    for (const clip of Array.isArray(audio) ? audio : [audio]){
+      if (my !== speakSeq) return;
+      player.src = `data:audio/wav;base64,${clip}`;
+      await new Promise((resolve) => { endSpeak = resolve; player.onended = player.onerror = resolve; player.play().then(() => { audioUnlocked = true; }, resolve); });
+    }
   } catch { if (my === speakSeq) await new Promise((resolve) => { endSpeak = resolve; browserSay(text).then(resolve); }); }
   if (my === speakSeq) endSpeak = null;
 }
@@ -1446,6 +1452,7 @@ $("signin-btn").onclick = async () => {
 $("code").addEventListener("keydown", (e)=>{ if (e.key==="Enter") $("signin-btn").click(); });
 
 $("signin-art").innerHTML = Art.mascot("happy", 96);
+$("app-version").textContent = "Version " + (APP_VERSION.startsWith("__") ? "local" : APP_VERSION);
 function googleBoot(){
   // Google already knows who this is; we only need a display name if the directory lookup fails.
   $("code").closest(".field").hidden = true; $("signout").hidden = true;
