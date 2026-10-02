@@ -1107,9 +1107,23 @@ $("signout").onclick = signOut;
 
 // ---------------- Lessons ----------------
 let L = null; // { lesson, i, results, chosen, order, said, checked }
+// A lesson only counts once it's finished, but leaving partway keeps your place (on this device, for a day).
+const progressKey = (id) => "sc_lesson_" + (state.name || "") + "_" + id;
+function saveProgress(){
+  if (!L) return;
+  store.set(progressKey(L.lesson.id), JSON.stringify({ i: L.i, results: L.results, answers: L.answers, at: Date.now() }));
+}
 async function openLesson(id){
   try { const lesson = await api("/api/path?lesson=" + encodeURIComponent(id));
-    L = { lesson, i:0, results:[], answers:[] }; show("s-lesson"); renderExercise();
+    L = { lesson, i:0, results:[], answers:[] };
+    try {
+      const p = JSON.parse(store.get(progressKey(id)) || "null");
+      if (p && Date.now() - p.at < 864e5 && p.i > 0 && p.i < lesson.exercises.length && p.results.length === p.i){
+        Object.assign(L, { i: p.i, results: p.results, answers: p.answers || [] });
+        toast(`Picking up where you left off: question ${p.i + 1} of ${lesson.exercises.length}.`);
+      }
+    } catch {}
+    show("s-lesson"); renderExercise();
   } catch (e) { toast(e.message); }
 }
 $("lesson-x").onclick = () => { stopListening(false); stopSpeaking(); loadHome(); };
@@ -1173,6 +1187,7 @@ $("check-btn").onclick = async () => {
   if (L.checked){ // continue
     L.i += 1;
     if (L.i >= L.lesson.exercises.length) return finishLesson();
+    saveProgress();
     return renderExercise();
   }
   if (ex.type === "choice"){
@@ -1204,6 +1219,7 @@ async function finishLesson(){
   try {
     const r = await api("/api/lesson", { lessonId: L.lesson.id, results: L.results, answers: L.answers });
     state.path = r.path; state.lastLessonId = r.id; $("done-review").hidden = !r.id;
+    store.del(progressKey(L.lesson.id));
     $("done-title").textContent = r.stars === 3 ? "Perfect lesson!" : "Lesson complete!";
     $("done-sub").innerHTML = `<span style="color:var(--gold-d);font-size:22px;letter-spacing:4px">${"★".repeat(r.stars)}</span><span style="color:var(--line);font-size:22px;letter-spacing:4px">${"★".repeat(3-r.stars)}</span><br>${esc(L.lesson.title)}`;
     $("done-xp").textContent = "+" + r.points; $("done-acc").textContent = Math.round(r.correct/r.total*100) + "%"; $("done-streak").textContent = r.streak;
