@@ -529,6 +529,7 @@ h1,h2,h3,.q,.unit h2,h3.section{color:var(--char);letter-spacing:-.02em}
         <div class="pills" id="farmers"></div>
         <div style="font-weight:800;margin-top:16px">How tough?</div>
         <div class="pills" id="tough"></div>
+        <label class="toggle" style="margin-top:16px"><span><b style="color:var(--char)">Live voice</b> (new): talk naturally and interrupt him, like a real call</span><input type="checkbox" id="live-pref"></label>
         <div class="err" id="setup-err" style="margin-top:12px"></div>
         <button class="btn btn-primary" id="setup-btn">Get my briefing</button>
       </div>
@@ -834,7 +835,7 @@ function show(id){
 // - on the voice page (?relay=1, opened from Apps Script so the mic works): messages to the Apps Script tab, which runs them
 const GAS = typeof google !== "undefined" && !!(google.script && google.script.run);
 const RELAY = !GAS && /[?&]relay=1/.test(location.search);
-const APP_VERSION = "202610021246"; // stamped by appsscript/build.mjs
+const APP_VERSION = "202610021316"; // stamped by appsscript/build.mjs
 // The version in the address makes phones load a fresh copy instead of GitHub's 10-minute cache.
 const VOICE_PAGE = "https://bryantholt.github.io/myyield-sales-coach/?relay=1&v=" + APP_VERSION;
 const VOICE_ORIGIN = "https://bryantholt.github.io";
@@ -1484,7 +1485,7 @@ async function getBriefing(){
     $("brief-mission").innerHTML = ((r.play && r.play.mission) || []).map((m) => `<li>${esc(m)}</li>`).join("");
     state.rollToken = r.rollToken; state.farmerName = r.farmerName; state.scene = r.scene;
     // Get the farmer's first line (and voice) ready while the rep reads the briefing.
-    state.firstTurn = api("/api/turn", { rollToken: r.rollToken, transcript: [], voice: true }).catch(() => null);
+    state.firstTurn = liveAvailable() ? null : api("/api/turn", { rollToken: r.rollToken, transcript: [], voice: true }).catch(() => null);
     $("brief-kicker").textContent = (state.checkpoint ? "Checkpoint call · score 70+ to pass · " : "") + (r.play ? r.play.name : "Your call");
     $("brief-name").innerHTML = "";
     $("brief-text").innerHTML = sceneCard(r.scene, true) + `<p style="margin:6px 0 0">${esc(r.briefing)}</p>`;
@@ -1493,6 +1494,7 @@ async function getBriefing(){
   } catch (e) { $("setup-err").textContent = e.message; }
 }
 $("setup-btn").onclick = () => { state.checkpoint = false; getBriefing(); };
+
 $("brief-x").onclick = () => { stopSpeaking(); loadHome(); };
 $("call-btn").onclick = () => { stopSpeaking(); startCall(); };
 
@@ -1563,9 +1565,9 @@ function callListen(keep, tapped){
 function openTyping(on){
   state.typing = on; $("typerow").hidden = !on; $("kb-btn").setAttribute("aria-pressed", String(on));
   if (on){ stopListening("pause"); if (!state.busy && state.phase !== "farmer") { phase("idle"); setStatus(Recog ? "Your turn. Type below." : "Your turn. " + KEYBOARD_TIP, "you"); } setTimeout(()=>$("typed").focus(), 50); }
-  else if (!state.busy && state.phase !== "farmer") callListen(true);
+  else if (!live.on && !state.busy && state.phase !== "farmer") callListen(true);
 }
-function sendTyped(){ const v = $("typed").value.trim(); if (!v || state.busy) return; $("typed").value = ""; sendRep(v); }
+function sendTyped(){ const v = $("typed").value.trim(); if (!v) return; if (live.on){ $("typed").value = ""; return liveSendText(v); } if (state.busy) return; $("typed").value = ""; sendRep(v); }
 $("typed").addEventListener("keydown", (e)=>{ if (e.key === "Enter") sendTyped(); });
 $("typed-send").onclick = sendTyped;
 $("kb-btn").onclick = () => openTyping(!state.typing);
@@ -1577,15 +1579,19 @@ $("done-talk").onclick = () => {
   stopListening(true);
 };
 // Tap the farmer to cut in while he's talking.
-$("portrait").onclick = () => { if (state.phase === "farmer"){ phase("idle"); stopSpeaking(); callListen(false, true); } };
+$("portrait").onclick = () => { if (live.on){ liveStopPlayback(); return; } if (state.phase === "farmer"){ phase("idle"); stopSpeaking(); callListen(false, true); } };
 $("mute-btn").onclick = () => {
   state.muted = !state.muted;
+  if (live.on){ live.muted = state.muted; $("mute-btn").setAttribute("aria-pressed", String(state.muted));
+    $("mute-btn").innerHTML = icon(state.muted ? "micoff" : "mic"); $("mute-lbl").textContent = state.muted ? "Unmute" : "Mute";
+    return setStatus(state.muted ? "You're muted." : "Your turn. Just talk.", state.muted ? "muted" : "you"); }
   $("mute-btn").setAttribute("aria-pressed", String(state.muted));
   $("mute-btn").innerHTML = icon(state.muted ? "micoff" : "mic"); $("mute-lbl").textContent = state.muted ? "Unmute" : "Mute";
   if (state.muted){ if (listening) { stopListening("pause"); phase("muted"); setStatus("You're muted. Tap the mic to talk.", "muted"); } }
   else if (!state.busy && state.phase !== "farmer") callListen(true, true);
 };
 $("coach-btn").onclick = () => {
+  if (live.on){ liveStopPlayback(); return liveSendText("Coach me."); }
   if (state.busy || state.ended) return toast("Hang on, he's still answering.");
   const said = listening ? heardText() : "";
   stopListening(false); stopSpeaking();
@@ -1606,7 +1612,117 @@ async function startCall(){
   $("call-meta").textContent = [sc.place, sc.crops].filter(Boolean).join(" · ");
   $("call-sub").textContent = state.checkpoint ? "Checkpoint call" : "Practice call";
   state.callT0 = Date.now(); tick(); clearInterval(state.timer); state.timer = setInterval(tick, 1000);
-  show("s-call"); caption(""); setStatus("Calling…"); say(""); farmerTurn();
+  show("s-call"); caption(""); setStatus("Calling…");
+  if (liveAvailable()){
+    try { await startLive(); return; }
+    catch (e) { stopLive(); if (state.ended) return; toast("Live voice didn't connect, so this call uses standard voice."); }
+  }
+  say(""); farmerTurn();
+}
+
+
+// ---------------- Live voice (Gemini Live) ----------------
+// A real-time call: the mic streams to Gemini, the farmer's voice streams back, and you can interrupt him.
+// The server hands out a one-time pass with his instructions locked in; the turn-by-turn call is the fallback.
+const LIVE_WS = "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContentConstrained?access_token=";
+const LIVE_WORKLET = `class Cap extends AudioWorkletProcessor{process(i){const c=i[0]&&i[0][0];if(c)this.port.postMessage(c.slice(0));return true}}registerProcessor("sc-cap",Cap);`;
+const live = { on: false, ws: null, ctx: null, stream: null, node: null, nextT: 0, sources: [], muted: false, buf: [], ui: null, farmerOpen: false };
+const liveWanted = () => store.get("sc_live") !== "off";
+const liveAvailable = () => liveWanted() && !MIC_BLOCKED && !!(window.WebSocket && window.AudioWorkletNode && navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+
+function liveAdd(role, text){
+  if (!text) return;
+  const t = state.transcript, last = t[t.length - 1];
+  if (last && last.role === role && !last.closed) last.text = (last.text + text).replace(/\s+/g, " ");
+  else t.push({ role, text: text.replace(/^\s+/, "") }); // keep the trailing space; the next chunk follows it
+  const cur = t[t.length - 1];
+  if (role === "farmer"){ live.farmerOpen = true; caption(cur.text.replace(/^Coach:\s*/i, "")); }
+  else { caption(cur.text, true); }
+}
+function liveCloseTurn(role){ const last = state.transcript[state.transcript.length - 1]; if (last && last.role === role){ last.closed = true; if (role === "farmer") addMsg("farmer", last.text); else addMsg("rep", last.text); } }
+function liveStopPlayback(){ for (const src of live.sources) try { src.stop(); } catch {} live.sources = []; live.nextT = 0; }
+function livePlay(b64){
+  const bin = atob(b64), n = bin.length >> 1, f = new Float32Array(n);
+  for (let i = 0; i < n; i++){ let v = bin.charCodeAt(2*i) | (bin.charCodeAt(2*i+1) << 8); if (v >= 32768) v -= 65536; f[i] = v / 32768; }
+  const buf = live.ctx.createBuffer(1, n, 24000); buf.copyToChannel(f, 0);
+  const src = live.ctx.createBufferSource(); src.buffer = buf; src.connect(live.ctx.destination);
+  const at = Math.max(live.ctx.currentTime + 0.03, live.nextT); src.start(at); live.nextT = at + buf.duration;
+  live.sources.push(src); src.onended = () => { live.sources = live.sources.filter((x) => x !== src); };
+}
+function liveMic(frame){
+  // Nothing goes out until Gemini confirms the call is set up (audio before setup stalls the connection).
+  if (!live.on || !live.ws || live.ws.readyState !== 1 || live.muted || state.ended) return;
+  // Downsample to 16 kHz, 16-bit, and send about every 100 ms.
+  const ratio = live.ctx.sampleRate / 16000;
+  for (let i = 0; i < frame.length / ratio; i++){
+    const a = Math.floor(i * ratio), b = Math.min(frame.length, Math.floor((i + 1) * ratio));
+    let sum = 0; for (let k = a; k < b; k++) sum += frame[k];
+    live.buf.push(Math.max(-1, Math.min(1, sum / Math.max(1, b - a))));
+  }
+  if (live.buf.length < 1600) return;
+  const pcm = new Int16Array(live.buf.length); live.buf.forEach((v, i) => { pcm[i] = v < 0 ? v * 32768 : v * 32767; }); live.buf = [];
+  const bytes = new Uint8Array(pcm.buffer); let bin = ""; for (let i = 0; i < bytes.length; i += 8192) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 8192));
+  live.ws.send(JSON.stringify({ realtimeInput: { audio: { data: btoa(bin), mimeType: "audio/pcm;rate=16000" } } }));
+}
+function liveSendText(text){
+  if (!live.ws || live.ws.readyState !== 1) return;
+  liveCloseTurn("farmer"); state.transcript.push({ role: "rep", text, closed: true }); addMsg("rep", text);
+  live.ws.send(JSON.stringify({ realtimeInput: { text } }));
+}
+function stopLive(){
+  live.on = false; clearInterval(live.ui);
+  try { live.ws && live.ws.close(); } catch {}
+  liveStopPlayback();
+  try { live.stream && live.stream.getTracks().forEach((t) => t.stop()); } catch {}
+  try { live.ctx && live.ctx.close(); } catch {}
+  live.ws = live.stream = live.node = live.ctx = null; live.buf = [];
+  audioMode("playback");
+}
+// Called right from the "Start the call" tap: the audio and mic must start on the tap itself.
+async function startLive(){
+  live.ctx = new (window.AudioContext || window.webkitAudioContext)();
+  live.ctx.resume();
+  const micP = navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1 } });
+  audioMode("play-and-record");
+  setStatus("Connecting…");
+  const [pass, stream] = await Promise.all([api("/api/live", { rollToken: state.rollToken }), micP]);
+  if (state.ended) { stream.getTracks().forEach((t) => t.stop()); return; }
+  live.stream = stream;
+  await live.ctx.audioWorklet.addModule(URL.createObjectURL(new Blob([LIVE_WORKLET], { type: "text/javascript" })));
+  const src = live.ctx.createMediaStreamSource(stream);
+  live.node = new AudioWorkletNode(live.ctx, "sc-cap");
+  const sink = live.ctx.createGain(); sink.gain.value = 0;
+  src.connect(live.node); live.node.connect(sink); sink.connect(live.ctx.destination);
+  live.node.port.onmessage = (e) => liveMic(e.data);
+  await new Promise((resolve, reject) => {
+    const ws = live.ws = new WebSocket(LIVE_WS + encodeURIComponent(pass.token));
+    setTimeout(() => { if (!live.on) reject(new Error("Live voice took too long to connect.")); }, 12000);
+    ws.onopen = () => ws.send(JSON.stringify({ setup: { model: pass.model } }));
+    ws.onerror = () => reject(new Error("Live voice couldn't connect."));
+    ws.onclose = (e) => { if (!live.on) return reject(new Error("Live voice couldn't connect.")); if (!state.ended){ live.on = false; setStatus("The call dropped. End it to get graded, or start a new one.", "err"); } };
+    ws.onmessage = async (ev) => {
+      const m = JSON.parse(typeof ev.data === "string" ? ev.data : await ev.data.text());
+      if (m.setupComplete){
+        live.on = true; resolve();
+        ws.send(JSON.stringify({ realtimeInput: { text: "[The call connects.]" } }));
+        return;
+      }
+      const sc = m.serverContent; if (!sc) return;
+      if (sc.interrupted){ liveStopPlayback(); liveCloseTurn("farmer"); }
+      if (sc.inputTranscription && sc.inputTranscription.text){ if (live.farmerOpen){ liveCloseTurn("farmer"); live.farmerOpen = false; } liveAdd("rep", sc.inputTranscription.text); }
+      if (sc.outputTranscription && sc.outputTranscription.text){ const last = state.transcript[state.transcript.length - 1]; if (last && last.role === "rep" && !last.closed) liveCloseTurn("rep"); liveAdd("farmer", sc.outputTranscription.text); }
+      for (const part of (sc.modelTurn && sc.modelTurn.parts) || []) if (part.inlineData && part.inlineData.data) livePlay(part.inlineData.data);
+      if (sc.turnComplete){ liveCloseTurn("farmer"); live.farmerOpen = false; }
+    };
+  });
+  // Show who's talking: him while his audio is playing, you otherwise.
+  live.ui = setInterval(() => {
+    if (!live.ctx || state.ended) return;
+    const talking = live.nextT > live.ctx.currentTime + 0.05;
+    if (talking && state.phase !== "farmer"){ phase("farmer"); setStatus(first() + " is talking"); }
+    if (!talking && state.phase === "farmer"){ phase("you"); $("done-talk").hidden = true; setStatus(live.muted ? "You're muted." : "Your turn. Just talk.", live.muted ? "muted" : "you"); }
+  }, 150);
+  phase("you"); $("done-talk").hidden = true; setStatus("Connected. He's picking up…", "you");
 }
 
 // Ending always asks first, so a stray tap or a pause never ends the call.
@@ -1622,6 +1738,7 @@ $("end-btn").onclick = () => {
 };
 $("end-cancel").onclick = () => {
   $("end-sheet").hidden = true;
+  if (live.ctx || live.ws) stopLive();
   stopListening(false); state.ended = true; stopSpeaking(); clearInterval(state.timer);
   loadHome();
 };
@@ -1631,6 +1748,8 @@ $("end-yes").onclick = async () => {
   if (state.ended) return;
   const pending = heardText(); stopListening(false);
   state.ended = true; stopSpeaking(); clearInterval(state.timer);
+  if (live.ctx || live.ws) stopLive();
+  state.transcript = state.transcript.filter((m) => m.text && m.text.trim()).map((m) => ({ role: m.role, text: m.text.trim() }));
   if (pending && !state.busy) state.transcript.push({ role:"rep", text: pending });
   if (!state.transcript.some((m)=>m.role==="rep")) return loadHome();
   $("grading-art").innerHTML = Art.mascot("think", 110); $("grading").hidden = false;
@@ -1680,6 +1799,8 @@ $("signin-btn").onclick = async () => {
 $("code").addEventListener("keydown", (e)=>{ if (e.key==="Enter") $("signin-btn").click(); });
 
 $("signin-art").innerHTML = Art.mascot("happy", 96);
+$("live-pref").checked = liveWanted();
+$("live-pref").onchange = (e) => store.set("sc_live", e.target.checked ? "on" : "off");
 $("node-x").onclick = () => { $("node-sheet").hidden = true; };
 $("node-sheet").onclick = (e) => { if (e.target.id === "node-sheet") $("node-sheet").hidden = true; };
 $("guide-play").onclick = playGuide;
