@@ -780,7 +780,7 @@ function show(id){
 // - on the voice page (?relay=1, opened from Apps Script so the mic works): messages to the Apps Script tab, which runs them
 const GAS = typeof google !== "undefined" && !!(google.script && google.script.run);
 const RELAY = !GAS && /[?&]relay=1/.test(location.search);
-const APP_VERSION = "202610021053"; // stamped by appsscript/build.mjs
+const APP_VERSION = "202610021056"; // stamped by appsscript/build.mjs
 // The version in the address makes phones load a fresh copy instead of GitHub's 10-minute cache.
 const VOICE_PAGE = "https://bryantholt.github.io/myyield-sales-coach/?relay=1&v=" + APP_VERSION;
 const VOICE_ORIGIN = "https://bryantholt.github.io";
@@ -904,15 +904,31 @@ async function say(text, role, audio){
 let recog = null, listening = false, micBtn = null, onHeard = null, onInterim = null, onMicOn = null;
 let heardBase = "", heardNow = "", wantOn = false, sendOnEnd = false, endAfter = 0, quietT = null;
 const heardText = () => (heardBase + " " + heardNow).replace(/\s+/g, " ").trim();
+let micWatch = null;
 function startListening(btn, done, interim, silenceMs, keep){
   if (!Recog) return false;
-  if (listening) return true;
+  if (listening){
+    // A tap while an old session is stuck: drop it and start clean.
+    try { recog && recog.abort(); } catch {}
+    recog = null; listening = false; wantOn = false;
+  }
   stopSpeaking();
+  // Phones (iPhone especially) keep the speaker in "playback" after the farmer talks, which leaves the mic deaf. Release it fully.
+  try { player.removeAttribute("src"); player.load(); } catch {}
   micBtn = btn; onHeard = done; onInterim = interim; endAfter = silenceMs || 0;
   if (!keep) heardBase = "";
   heardNow = ""; wantOn = true; sendOnEnd = false;
   listening = true; btn && btn.classList.add("on");
-  openRecog(); return true;
+  openRecog();
+  // If the mic hasn't actually started in 4 seconds, say so instead of sitting there.
+  clearTimeout(micWatch);
+  const mine = recog;
+  micWatch = setTimeout(() => { if (recog === mine && listening && !mine._started){
+    try { mine.abort(); } catch {}
+    recog = null; listening = false; wantOn = false; btn && btn.classList.remove("on");
+    onInterim && onInterim(heardText(), "The mic didn't start. Tap to try again.");
+  } }, 4000);
+  return true;
 }
 function openRecog(){
   const r = new Recog(); recog = r; r.lang = "en-US"; r.interimResults = true; r.continuous = true;
@@ -920,7 +936,7 @@ function openRecog(){
     for (let i=0;i<e.results.length;i++) t += e.results[i][0].transcript + " ";
     heardNow = t; onInterim && onInterim(heardText());
     if (endAfter){ clearTimeout(quietT); if (heardText().split(" ").length >= 3) quietT = setTimeout(()=>stopListening(true), endAfter); } };
-  r.onstart = () => { if (r === recog && onMicOn) onMicOn(); };
+  r.onstart = () => { r._started = true; if (r === recog && onMicOn) onMicOn(); };
   r.onerror = (e) => {
     if (e.error === "not-allowed" || e.error === "service-not-allowed"){ wantOn = false; micBlockedWhy().then((why) => onInterim && onInterim(heardText(), "The mic is blocked here (" + why + "). " + KEYBOARD_TIP)); }
     else if (e.error === "audio-capture" || e.error === "network" || e.error === "language-not-supported"){
@@ -1326,6 +1342,7 @@ function callListen(keep, tapped){
   phase("you"); $("done-talk").textContent = "I'm done talking"; state.retry = false;
   onMicOn = () => setStatus("Listening. Talk now.", "you");
   const ok = startListening(null, sendRep, (t, warn) => {
+    if (warn && /didn't start/.test(warn)){ phase("ready"); $("done-talk").innerHTML = icon("mic") + "Tap to talk"; return setStatus(warn, "err"); }
     if (warn){ openTyping(true); return setStatus(warn, "err"); }
     $("s-call").classList.toggle("hearing", !!t); if (t) caption(t, true);
   }, 2800, keep);
