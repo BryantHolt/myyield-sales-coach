@@ -501,6 +501,7 @@ h1,h2,h3,.q,.unit h2,h3.section{color:var(--char);letter-spacing:-.02em}
     <button class="btn btn-primary" id="launch-btn">Open Sales Coach</button>
     <p class="sub" style="text-align:center;margin-top:14px">Keep this tab open while you practice. It connects the coach to your My Yield Google account.</p>
     <p style="text-align:center;margin-top:18px"><button class="link" id="launch-here">Use it here instead (no hands-free mic)</button></p>
+    <p class="sub" style="text-align:center;font-size:12px;margin-top:18px" id="launch-version"></p>
   </div>
 </section>
 
@@ -552,6 +553,7 @@ h1,h2,h3,.q,.unit h2,h3.section{color:var(--char);letter-spacing:-.02em}
     <div class="wrap" id="tab-me" hidden>
       <h3 class="section" id="me-name"></h3>
       <p class="sub" id="me-sub"></p>
+      <p class="sub" style="font-size:12px;margin-top:-2px" id="app-version"></p>
       <div class="statgrid" id="me-stats"></div>
       <h3 class="section">History</h3>
       <p class="sub" style="margin-top:-4px">Tap any lesson or call to see how it was graded.</p>
@@ -559,7 +561,6 @@ h1,h2,h3,.q,.unit h2,h3.section{color:var(--char);letter-spacing:-.02em}
       <h3 class="section">Badges</h3>
       <div class="badgegrid" id="me-badges"></div>
       <div style="margin:28px 0"><button class="btn btn-ghost" id="signout">Sign out</button></div>
-      <p class="sub" style="text-align:center;font-size:12px" id="app-version"></p>
     </div>
   </main>
 
@@ -835,7 +836,7 @@ function show(id){
 // - on the voice page (?relay=1, opened from Apps Script so the mic works): messages to the Apps Script tab, which runs them
 const GAS = typeof google !== "undefined" && !!(google.script && google.script.run);
 const RELAY = !GAS && /[?&]relay=1/.test(location.search);
-const APP_VERSION = "202610021316"; // stamped by appsscript/build.mjs
+const APP_VERSION = "202610021333"; // stamped by appsscript/build.mjs
 // The version in the address makes phones load a fresh copy instead of GitHub's 10-minute cache.
 const VOICE_PAGE = "https://bryantholt.github.io/myyield-sales-coach/?relay=1&v=" + APP_VERSION;
 const VOICE_ORIGIN = "https://bryantholt.github.io";
@@ -1807,7 +1808,7 @@ $("guide-play").onclick = playGuide;
 $("guide-x").onclick = () => { stopGuide(); stopSpeaking(); state.tab = "learn"; show("s-home"); renderPath(); window.scrollTo(0, 0); };
 // The logo goes home: the Units page on Learn.
 $("brand-home").onclick = () => { state.learnView = "units"; setTab("learn"); if (state.path) renderUnitList(); window.scrollTo(0, 0); };
-$("app-version").textContent = "Version " + (APP_VERSION.startsWith("__") ? "local" : APP_VERSION);
+$("app-version").textContent = $("launch-version").textContent = "Version " + (APP_VERSION.startsWith("__") ? "local" : APP_VERSION);
 function googleBoot(){
   // Google already knows who this is; we only need a display name if the directory lookup fails.
   $("code").closest(".field").hidden = true; $("signout").hidden = true;
