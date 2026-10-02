@@ -858,6 +858,8 @@ let audioUnlocked = false;
 function unlockAudio(){
   if (audioUnlocked) return;
   audioUnlocked = true;
+  // Never interrupt a line that's already playing (a scroll counts as a tap).
+  if (!player.paused && player.src && player.src !== SILENT_WAV) return;
   try { player.src = SILENT_WAV; player.play().catch(() => { audioUnlocked = false; }); } catch { audioUnlocked = false; }
   if ("speechSynthesis" in window) try { speechSynthesis.speak(new SpeechSynthesisUtterance("")); } catch {}
 }
@@ -882,7 +884,7 @@ async function say(text, role){
     const { audio, mime } = r;
     if (my !== speakSeq) return;
     player.src = `data:${mime || "audio/wav"};base64,${audio}`;
-    await new Promise((resolve) => { endSpeak = resolve; player.onended = player.onerror = resolve; player.play().catch(resolve); });
+    await new Promise((resolve) => { endSpeak = resolve; player.onended = player.onerror = resolve; player.play().then(() => { audioUnlocked = true; }, resolve); });
   } catch { if (my === speakSeq) await new Promise((resolve) => { endSpeak = resolve; browserSay(text).then(resolve); }); }
   if (my === speakSeq) endSpeak = null;
 }
@@ -1427,8 +1429,11 @@ if (GAS){
   // Apps Script's frame switches the mic off, so the app opens in its own tab and this tab relays for it.
   $("launch-art").innerHTML = Art.mascot("cheer", 96);
   show("s-launch");
+  let coachTab = null;
   $("launch-btn").onclick = () => {
-    const w = window.open(VOICE_PAGE, "myyield-sales-coach");
+    // Reuse the coach tab if it's still open; otherwise open a fresh one (a closed named tab can't be reopened on some phones).
+    if (coachTab && !coachTab.closed){ try { coachTab.focus(); return; } catch {} }
+    const w = coachTab = window.open(VOICE_PAGE, "_blank");
     $("launch-msg").textContent = w ? "Sales Coach is open in another tab. Keep this one open." : "Your browser blocked the new tab. Allow pop-ups for this page, then tap again.";
     $("launch-btn").textContent = "Open it again";
   };
