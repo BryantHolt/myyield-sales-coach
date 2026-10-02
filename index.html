@@ -837,7 +837,7 @@ function show(id){
 // - on the voice page (?relay=1, opened from Apps Script so the mic works): messages to the Apps Script tab, which runs them
 const GAS = typeof google !== "undefined" && !!(google.script && google.script.run);
 const RELAY = !GAS && /[?&]relay=1/.test(location.search);
-const APP_VERSION = "202610021159"; // stamped by appsscript/build.mjs
+const APP_VERSION = "202610021219"; // stamped by appsscript/build.mjs
 // The version in the address makes phones load a fresh copy instead of GitHub's 10-minute cache.
 const VOICE_PAGE = "https://bryantholt.github.io/myyield-sales-coach/?relay=1&v=" + APP_VERSION;
 const VOICE_ORIGIN = "https://bryantholt.github.io";
@@ -858,7 +858,7 @@ if (RELAY) window.addEventListener("message", (e) => {
   if (e.data.t === "sc-reply" && relayWait[e.data.id]){ const done = relayWait[e.data.id]; delete relayWait[e.data.id]; done(e.data.raw); }
 });
 // The Apps Script tab answers the voice page, only for the coach's own requests and only from the voice page's address.
-const RELAY_ROUTES = ["/api/whoami","/api/login","/api/me","/api/path","/api/start","/api/turn","/api/say","/api/lesson","/api/grade","/api/history","/api/tts"];
+const RELAY_ROUTES = ["/api/guide-audio","/api/whoami","/api/login","/api/me","/api/path","/api/start","/api/turn","/api/say","/api/lesson","/api/grade","/api/history","/api/tts"];
 if (GAS) window.addEventListener("message", (e) => {
   if (e.origin !== VOICE_ORIGIN || !e.data) return;
   if (e.data.t === "sc-ready") return e.source.postMessage({ t: "sc-hello" }, e.origin);
@@ -1164,25 +1164,41 @@ function openGuide(k){
   $("guide-title").textContent = `Unit ${k + 1} · ${u.title}`;
   $("guide-sub").textContent = u.subtitle;
   $("guide-body").innerHTML = u.guide.map((g, j) => `<div class="gsec" id="gsec-${j}"><h4>${esc(g.h)}</h4><p>${esc(g.p)}</p></div>`).join("");
-  $("guide-play").innerHTML = icon("mic") + `Listen (${guideMinutes(u)} min)`;
+  $("guide-play").innerHTML = icon("mic") + `Listen (${u.guideSeconds ? Math.round(u.guideSeconds / 60 * 2) / 2 : guideMinutes(u)} min)`;
+  if (guideAudio && guideAudio.unit !== u.id) guideAudio = null;
   show("s-guide");
 }
+// Plays the unit's saved recording (made once, not generated each time) and follows along section by section.
+let guideAudio = null; // { unit, src, pos }
 async function playGuide(){
-  if (guidePlaying){ guidePlaying = false; stopSpeaking(); $("guide-play").innerHTML = icon("mic") + "Listen again"; return; }
   const u = state.path.units[state.guideUnit];
-  guidePlaying = true; $("guide-play").textContent = "Pause";
-  // Ask for every section's voice at once, then play them in order as they arrive.
-  const clips = u.guide.map((g) => api("/api/tts", { text: g.h + ". " + g.p, role: "coach" }).catch(() => null));
-  for (let j = 0; j < u.guide.length && guidePlaying; j++){
-    for (const el of document.querySelectorAll(".gsec")) el.classList.toggle("on", el.id === "gsec-" + j);
-    $("gsec-" + j).scrollIntoView({ block: "center", behavior: "smooth" });
-    const r = await clips[j];
-    if (!guidePlaying) break;
-    await say(u.guide[j].h + ". " + u.guide[j].p, "coach", r && r.audio);
+  const btn = $("guide-play");
+  if (guidePlaying){ guidePlaying = false; player.pause(); btn.innerHTML = icon("mic") + "Resume"; return; }
+  if (!guideAudio || guideAudio.unit !== u.id){
+    btn.textContent = "Loading…";
+    try {
+      const r = await api("/api/guide-audio?unit=" + encodeURIComponent(u.id));
+      guideAudio = { unit: u.id, src: `data:audio/mp3;base64,${r.audio}`, pos: 0 };
+    } catch (e) { btn.innerHTML = icon("mic") + "Listen"; return toast(e.message); }
   }
-  for (const el of document.querySelectorAll(".gsec")) el.classList.remove("on");
-  if (guidePlaying){ guidePlaying = false; $("guide-play").innerHTML = icon("mic") + "Listen again"; }
+  stopSpeaking();
+  if (player.src !== guideAudio.src){ player.src = guideAudio.src; player.currentTime = guideAudio.pos || 0; }
+  audioMode("playback");
+  const secs = u.guide.map((g) => g.t || 0);
+  let lastOn = -1;
+  player.ontimeupdate = () => {
+    guideAudio.pos = player.currentTime;
+    let j = 0; for (let x = 0; x < secs.length; x++) if (player.currentTime >= secs[x]) j = x;
+    if (j !== lastOn){ lastOn = j;
+      for (const el of document.querySelectorAll(".gsec")) el.classList.toggle("on", el.id === "gsec-" + j);
+      $("gsec-" + j) && $("gsec-" + j).scrollIntoView({ block: "center", behavior: "smooth" }); }
+  };
+  player.onended = () => { guidePlaying = false; guideAudio.pos = 0; btn.innerHTML = icon("mic") + "Listen again";
+    for (const el of document.querySelectorAll(".gsec")) el.classList.remove("on"); };
+  guidePlaying = true; btn.innerHTML = "Pause";
+  try { await player.play(); audioUnlocked = true; } catch { guidePlaying = false; btn.innerHTML = icon("mic") + "Listen"; toast("Tap Listen again to play."); }
 }
+function stopGuide(){ guidePlaying = false; player.ontimeupdate = null; try { player.pause(); } catch {} }
 
 function renderUnitPath(box, u, k){
   const nodes = [...u.lessons.map((l)=>({...l, kind:"lesson"})), ...(u.checkpoint ? [{ ...u.checkpoint, icon:"trophy", kind:"checkpoint", stars:0 }] : [])];
@@ -1657,7 +1673,7 @@ $("signin-art").innerHTML = Art.mascot("happy", 96);
 $("node-x").onclick = () => { $("node-sheet").hidden = true; };
 $("node-sheet").onclick = (e) => { if (e.target.id === "node-sheet") $("node-sheet").hidden = true; };
 $("guide-play").onclick = playGuide;
-$("guide-x").onclick = () => { guidePlaying = false; stopSpeaking(); state.tab = "learn"; show("s-home"); renderPath(); window.scrollTo(0, 0); };
+$("guide-x").onclick = () => { stopGuide(); stopSpeaking(); state.tab = "learn"; show("s-home"); renderPath(); window.scrollTo(0, 0); };
 // The logo goes home: the Units page on Learn.
 $("brand-home").onclick = () => { state.learnView = "units"; setTab("learn"); if (state.path) renderUnitList(); window.scrollTo(0, 0); };
 $("app-version").textContent = "Version " + (APP_VERSION.startsWith("__") ? "local" : APP_VERSION);
