@@ -224,14 +224,29 @@ textarea.said:focus{border-color:var(--blue)}
 .confetti i{position:absolute;top:-12px;width:9px;height:14px;border-radius:2px;animation:fall 1.8s ease-in forwards}
 @keyframes fall{to{transform:translateY(105vh) rotate(540deg);opacity:.9}}
 
-/* Unit picker: every unit is open */
-.unitpicks{display:flex;gap:8px;overflow-x:auto;padding:14px 0 4px;margin:0 -16px;padding-left:16px;padding-right:16px;scrollbar-width:none}
-.unitpicks::-webkit-scrollbar{display:none}
-.unitpick{flex:none;display:flex;flex-direction:column;align-items:flex-start;gap:1px;padding:9px 12px;border-radius:10px;border:1px solid var(--line);background:#fff;text-align:left;min-width:104px}
-.unitpick b{font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--blue)}
-.unitpick span{font-weight:800;font-size:14px;color:var(--char)}
-.unitpick small{font-size:12px;color:var(--muted);font-weight:600}
-.unitsec{scroll-margin-top:72px}
+/* Units page and pinned unit header (Duolingo-style) */
+.ucard{display:flex;align-items:center;gap:14px;width:100%;text-align:left;background:#fff;border:1px solid var(--line);border-radius:12px;padding:14px;margin:10px 0}
+.ucard.here{border:2px solid var(--char)}
+.uic{width:52px;height:52px;flex:none;border-radius:50%;display:grid;place-items:center;background:var(--stone);color:var(--blue);border:2px solid var(--blue)}
+.uic svg.i{width:26px;height:26px}
+.ucard.here .uic{background:var(--char);color:var(--gold);border-color:var(--gold)}
+.ucard.fin .uic{background:var(--ok-50);color:var(--ok-d);border-color:var(--ok)}
+.ubody{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
+.ueye{font-size:11.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--blue)}
+.uhere{font-style:normal;background:var(--gold);color:var(--char);border-radius:4px;padding:1px 6px;margin-left:4px;letter-spacing:.04em}
+.utitle{font-weight:800;font-size:16px;color:var(--char);line-height:1.25}
+.ubar{height:6px;border-radius:99px;background:var(--line-2);overflow:hidden;margin-top:4px}
+.ubar span{display:block;height:100%;background:var(--blue);border-radius:99px}
+.ucount{font-size:12px;color:var(--muted);font-weight:600}
+.ucta{flex:none;font-weight:700;font-size:14px;color:#fff;background:var(--char);border-radius:6px;padding:9px 12px}
+.ucard.fin .ucta{background:transparent;color:var(--char);border:1.5px solid var(--char)}
+.unithead{position:sticky;top:61px;z-index:4;padding-top:10px;background:var(--bg)}
+.unithead .unit{margin:0;padding:12px 14px}
+.unithead .unit h2{font-size:18px;margin:2px 0 8px;line-height:1.25}
+.unithead .art svg{width:54px;height:54px}
+.unithead .unit .prog{margin-top:0}
+.uback{position:relative;z-index:2;display:inline-flex;align-items:center;gap:6px;color:#fff;font-weight:700;font-size:13px;background:rgba(255,255,255,.12);border-radius:6px;padding:6px 10px;margin-bottom:10px}
+.uback svg.i{width:16px;height:16px}
 
 /* Call: a phone call, not a chat */
 .call{background:linear-gradient(180deg,var(--blue-50) 0%,var(--card) 55%)}
@@ -478,8 +493,7 @@ h1,h2,h3,.q,.unit h2,h3.section{color:var(--char);letter-spacing:-.02em}
 
   <main class="home">
     <div class="wrap" id="tab-learn">
-      <div class="unitpicks" id="unit-picks"></div>
-      <div id="units"></div>
+      <div id="learn"></div>
     </div>
 
     <div class="wrap" id="tab-practice" hidden>
@@ -783,7 +797,7 @@ function show(id){
 // - on the voice page (?relay=1, opened from Apps Script so the mic works): messages to the Apps Script tab, which runs them
 const GAS = typeof google !== "undefined" && !!(google.script && google.script.run);
 const RELAY = !GAS && /[?&]relay=1/.test(location.search);
-const APP_VERSION = "202610021133"; // stamped by appsscript/build.mjs
+const APP_VERSION = "202610021137"; // stamped by appsscript/build.mjs
 // The version in the address makes phones load a fresh copy instead of GitHub's 10-minute cache.
 const VOICE_PAGE = "https://bryantholt.github.io/myyield-sales-coach/?relay=1&v=" + APP_VERSION;
 const VOICE_ORIGIN = "https://bryantholt.github.io";
@@ -1010,25 +1024,48 @@ function renderChips(){
 }
 
 const OFFSETS = [0, 56, 84, 56, 0, -56, -84, -56];
-// Every unit is open (pick any); inside a unit the lessons unlock in order.
+// Learn works like Duolingo: a Units page (every unit as a card, any can be started) and one unit's path at a time,
+// with that unit's header pinned at the top and a way back to all units. Inside a unit, lessons unlock in order.
+const unitProgress = (u) => {
+  const total = u.lessons.length + (u.checkpoint ? 1 : 0);
+  const done = u.lessons.filter((l) => l.state === "done").length + (u.checkpoint && u.checkpoint.state === "done" ? 1 : 0);
+  return { total, done, started: done > 0, finished: done === total };
+};
 function renderPath(){
   const units = state.path.units;
-  $("unit-picks").innerHTML = units.map((u, k) => {
-    const done = u.lessons.filter((l) => l.state === "done").length;
-    return `<button class="unitpick" data-k="${k}"><b>Unit ${k + 1}</b><span>${esc(u.short || u.title)}</span><small>${esc(u.title)} · ${done}/${u.lessons.length}</small></button>`;
-  }).join("");
-  for (const b of $("unit-picks").querySelectorAll(".unitpick")) b.onclick = () => $("unit-" + b.dataset.k).scrollIntoView({ block: "start" });
-  const wrap = $("units"); wrap.innerHTML = "";
-  units.forEach((u, k) => {
-    const total = u.lessons.length + (u.checkpoint ? 1 : 0);
-    const done = u.lessons.filter((l) => l.state === "done").length + (u.checkpoint && u.checkpoint.state === "done" ? 1 : 0);
-    const sec = document.createElement("section");
-    sec.id = "unit-" + k; sec.className = "unitsec";
-    sec.innerHTML = `<div class="unit"><div class="eyebrow">Unit ${k + 1}</div><h2>${esc(u.title)}</h2><p>${esc(u.subtitle)}</p>
-      <div class="prog"><span style="width:${(done / total) * 100}%"></span></div><div class="art">${Art.field}</div></div><div class="path"></div>`;
-    wrap.appendChild(sec);
-    renderUnitPath(sec.querySelector(".path"), u, k);
-  });
+  const saved = store.get("sc_unit");
+  const k = units.findIndex((u) => u.id === saved);
+  if (state.learnView === "units" || k < 0) renderUnitList(); else renderUnit(k);
+}
+function renderUnitList(){
+  state.learnView = "units";
+  const units = state.path.units, here = store.get("sc_unit");
+  const box = $("learn");
+  box.innerHTML = `<h3 class="section" style="margin-top:18px">Units</h3><p class="sub">Start any unit. Inside a unit, each lesson unlocks the next.</p>` +
+    units.map((u, k) => {
+      const p = unitProgress(u), isHere = u.id === here;
+      const cta = p.finished ? "Review" : p.started || isHere ? "Continue" : "Start";
+      return `<button class="ucard ${p.finished ? "fin" : ""} ${isHere ? "here" : ""}" data-k="${k}">
+        <span class="uic">${icon(p.finished ? "check" : u.icon || "book")}</span>
+        <span class="ubody"><span class="ueye">Unit ${k + 1} · ${esc(u.title)}${isHere ? ' <i class="uhere">You\'re here</i>' : ""}</span>
+          <span class="utitle">${esc(u.subtitle)}</span>
+          <span class="ubar"><span style="width:${(p.done / p.total) * 100}%"></span></span>
+          <span class="ucount">${p.done} of ${p.total} done</span></span>
+        <span class="ucta">${cta}</span></button>`;
+    }).join("");
+  for (const b of box.querySelectorAll(".ucard")) b.onclick = () => { store.set("sc_unit", units[+b.dataset.k].id); state.learnView = "unit"; renderUnit(+b.dataset.k); window.scrollTo(0, 0); };
+}
+function renderUnit(k){
+  state.learnView = "unit";
+  const u = state.path.units[k], p = unitProgress(u);
+  const box = $("learn");
+  box.innerHTML = `<div class="unithead"><div class="unit">
+      <button class="uback" id="all-units">${icon("grid")}<span>All units</span></button>
+      <div class="eyebrow">Unit ${k + 1} · ${esc(u.title)}</div><h2>${esc(u.subtitle)}</h2>
+      <div class="prog"><span style="width:${(p.done / p.total) * 100}%"></span></div><div class="art">${Art.field}</div></div></div>
+    <div class="path"></div>`;
+  $("all-units").onclick = () => { renderUnitList(); window.scrollTo(0, 0); };
+  renderUnitPath(box.querySelector(".path"), u, k);
 }
 function renderUnitPath(box, u, k){
   const nodes = [...u.lessons.map((l)=>({...l, kind:"lesson"})), ...(u.checkpoint ? [{ ...u.checkpoint, icon:"trophy", kind:"checkpoint", stars:0 }] : [])];
@@ -1041,7 +1078,7 @@ function renderUnitPath(box, u, k){
     const ic = n.state==="locked" ? "lock" : n.state==="done" && n.kind!=="checkpoint" ? "check" : n.icon;
     el.innerHTML = `${n.state==="current" ? `<div class="start">${n.kind==="checkpoint"?"CHECKPOINT":"START"}</div>` : ""}
       <button class="bubble" aria-label="${esc(n.title)}">${icon(ic)}</button>
-      ${n.kind==="lesson" && n.state==="done" ? `<div class="stars">${[1,2,3].map((k)=>`<svg style="color:${k<=n.stars?"var(--gold)":"var(--line)"}"><use href="#i-star"/></svg>`).join("")}</div>` : ""}
+      ${n.kind==="lesson" && n.state==="done" ? `<div class="stars">${[1,2,3].map((k)=>`<span style="color:${k<=n.stars?"var(--gold-d)":"var(--line)"}">★</span>`).join("")}</div>` : ""}
       <div class="label">${esc(n.title)}</div>`;
     el.querySelector(".bubble").onclick = () => {
       if (n.state==="locked") return;
