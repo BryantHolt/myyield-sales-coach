@@ -836,7 +836,7 @@ function show(id){
 // - on the voice page (?relay=1, opened from Apps Script so the mic works): messages to the Apps Script tab, which runs them
 const GAS = typeof google !== "undefined" && !!(google.script && google.script.run);
 const RELAY = !GAS && /[?&]relay=1/.test(location.search);
-const APP_VERSION = "202610021944"; // stamped by appsscript/build.mjs
+const APP_VERSION = "202610032214"; // stamped by appsscript/build.mjs
 // The version in the address makes phones load a fresh copy instead of GitHub's 10-minute cache.
 const VOICE_PAGE = "https://bryantholt.github.io/myyield-sales-coach/?relay=1&v=" + APP_VERSION;
 const VOICE_ORIGIN = "https://bryantholt.github.io";
@@ -1797,7 +1797,8 @@ function renderResults({ overall, grade, game, transcript, scene, at, checkpoint
   if (review && points) rw.push(`<span class="pill" style="border-color:var(--gold);background:var(--gold-50);color:var(--gold-ink)">⚡ +${points} points</span>`);
   $("res-reward").innerHTML = rw.join("");
   badgeTiles($("res-badges"), (game?.newBadges||[]).map((b)=>({...b,earned:true})), (game?.newBadges||[]).map((b)=>b.id));
-  $("res-areas").innerHTML = `<div style="font-weight:800;font-size:18px">By skill</div>` + grade.areas.map((a)=>`<div class="area"><div class="top"><span>${esc(a.area)}</span><span>${a.score}/5</span></div><div class="meter"><span style="width:${a.score*20}%;background:${a.score>=4?"var(--ok)":a.score>=3?"var(--blue)":"var(--err)"}"></span></div><p>${esc(a.note)}${a.evidence?` You said: “${esc(a.evidence)}”`:""}</p></div>`).join("");
+  $("res-areas").innerHTML = `<div style="font-weight:800;font-size:18px">By skill</div>` + grade.areas.map((a)=>`<div class="area"><div class="top"><span>${esc(a.area)}</span><span>${a.score}/5</span></div><div class="meter"><span style="width:${a.score*20}%;background:${a.score>=4?"var(--ok)":a.score>=3?"var(--blue)":"var(--err)"}"></span></div><p>${esc(a.note)}${a.evidence?` You said: “${esc(a.evidence)}”`:""}${a.capped?` <b>Capped at ${a.score} by a habit below.</b>`:""}</p></div>`).join("")
+    + ((grade.red_flags||[]).length ? `<div style="font-weight:800;font-size:16px;margin-top:12px">Habits the coaches flag</div><ul>${grade.red_flags.map((f)=>`<li>${esc(f.label||f)}</li>`).join("")}</ul>` : "");
   $("res-fix").textContent = grade.fix_first; $("res-better").textContent = grade.better_line;
   const li = (el, items) => el.innerHTML = (items||[]).map((t)=>`<li>${esc(t)}</li>`).join("");
   li($("res-well"), grade.did_well); li($("res-missed"), grade.missed); li($("res-lines"), grade.playbook_lines);
