@@ -846,7 +846,7 @@ function show(id){
 // - on the voice page (?relay=1, opened from Apps Script so the mic works): messages to the Apps Script tab, which runs them
 const GAS = typeof google !== "undefined" && !!(google.script && google.script.run);
 const RELAY = !GAS && /[?&]relay=1/.test(location.search);
-const APP_VERSION = "202610051817"; // stamped by appsscript/build.mjs
+const APP_VERSION = "202610051828"; // stamped by appsscript/build.mjs
 // The version in the address makes phones load a fresh copy instead of GitHub's 10-minute cache.
 const VOICE_PAGE = "https://bryantholt.github.io/myyield-sales-coach/test/?relay=1&v=" + APP_VERSION;
 const VOICE_ORIGIN = "https://bryantholt.github.io";
@@ -1007,7 +1007,8 @@ async function say(text, role, audio){
 let recog = null, listening = false, micBtn = null, onHeard = null, onInterim = null, onMicOn = null;
 let heardBase = "", heardNow = "", wantOn = false, sendOnEnd = false, endAfter = 0, quietT = null;
 const heardText = () => (heardBase + " " + heardNow).replace(/\s+/g, " ").trim();
-let micWatch = null;
+let micWatch = null, deafRetries = 0;
+const IOS = /iPhone|iPad/.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && /Mac/.test(navigator.platform));
 function startListening(btn, done, interim, silenceMs, keep){
   if (!Recog) return false;
   if (listening){
@@ -1022,8 +1023,9 @@ function startListening(btn, done, interim, silenceMs, keep){
   micBtn = btn; onHeard = done; onInterim = interim; endAfter = silenceMs || 0;
   if (!keep) heardBase = "";
   heardNow = ""; wantOn = true; sendOnEnd = false;
-  listening = true; btn && btn.classList.add("on");
-  openRecog();
+  listening = true; btn && btn.classList.add("on"); deafRetries = 1;
+  // iPhones switch the audio over to "record" a moment after we ask; a mic opened before that is deaf.
+  if (IOS) setTimeout(() => { if (wantOn && listening && !recog) openRecog(); }, 300); else openRecog();
   return true;
 }
 // If the mic hasn't actually started, say so instead of sitting there. The first time, the phone shows
@@ -1042,7 +1044,7 @@ function openRecog(){
   // and the restart below stitches the phrases together.
   const r = new Recog(); recog = r; r.lang = "en-US"; r.interimResults = true; r.continuous = !/Android/i.test(navigator.userAgent);
   watchMic(r);
-  r.onresult = (e) => { if (r !== recog) return; let t = "";
+  r.onresult = (e) => { if (r !== recog) return; r._heard = true; let t = "";
     for (let i=0;i<e.results.length;i++) t += e.results[i][0].transcript + " ";
     // iPhones (and some Chrome builds) quietly start a fresh results list after a pause in the middle of one mic session.
     // Without this, everything said before the pause vanishes ("it recorded some of it, but not all").
@@ -1052,7 +1054,9 @@ function openRecog(){
     r._len = e.results.length; r._first = first; r._final0 = !!(e.results.length && e.results[0].isFinal);
     heardNow = t; onInterim && onInterim(heardText());
     if (endAfter){ clearTimeout(quietT); if (heardText().split(" ").length >= 3) quietT = setTimeout(()=>stopListening(true), endAfter); } };
-  r.onstart = () => { r._started = true; store.set("sc_mic_ok", "1"); if (r === recog && onMicOn) onMicOn(); };
+  r.onstart = () => { r._started = true; store.set("sc_mic_ok", "1"); if (r === recog && onMicOn) onMicOn();
+    // The mic says it's on but hears nothing (seen on iPhones on the first tap): quietly reopen it once.
+    setTimeout(() => { if (r === recog && listening && wantOn && !r._heard && deafRetries > 0){ deafRetries--; try { r.abort(); } catch {} } }, 5000); };
   r.onerror = (e) => {
     if (document.hidden) return; // the phone locked or switched apps; handled when the rep comes back
     if (e.error === "not-allowed" || e.error === "service-not-allowed"){ wantOn = false; micBlockedWhy().then((why) => onInterim && onInterim(heardText(), "The mic is blocked here (" + why + "). " + KEYBOARD_TIP)); }
