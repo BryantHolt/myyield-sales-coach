@@ -846,12 +846,12 @@ function show(id){
 // - on the voice page (?relay=1, opened from Apps Script so the mic works): messages to the Apps Script tab, which runs them
 const GAS = typeof google !== "undefined" && !!(google.script && google.script.run);
 const RELAY = !GAS && /[?&]relay=1/.test(location.search);
-const APP_VERSION = "202610051637"; // stamped by appsscript/build.mjs
+const APP_VERSION = "202610051755"; // stamped by appsscript/build.mjs
 // The version in the address makes phones load a fresh copy instead of GitHub's 10-minute cache.
 const VOICE_PAGE = "https://bryantholt.github.io/myyield-sales-coach/test/?relay=1&v=" + APP_VERSION;
 const VOICE_ORIGIN = "https://bryantholt.github.io";
 const GAS_PEER = /^https:\/\/n-[a-z0-9-]+-script\.googleusercontent\.com$/;
-let relayPeer = null, relaySeq = 0;
+let relayPeer = null, relaySeq = 0, relayAcks = false, relayVersion = "";
 // google.script.run failures are not network problems most of the time. Say what actually went wrong.
 function serverErrorText(err){
   const m = String((err && (err.message || err)) || "");
@@ -872,13 +872,26 @@ function relayCall(route, data){
     if (!window.opener || window.opener.closed || !relayPeer) return reject(new Error("The Sales Coach tab that opened this page is closed. Open your Sales Coach link again."));
     const id = ++relaySeq; relayWait[id] = resolve;
     window.opener.postMessage({ t: "sc-call", id, route, data }, relayPeer);
+    // An up-to-date Sales Coach tab answers "got it" right away. If it doesn't, the phone has frozen or closed that tab:
+    // say so in seconds instead of waiting minutes.
+    if (relayAcks){
+      relayAckWait[id] = setTimeout(() => { if (relayWait[id]){ delete relayWait[id]; delete relayAckWait[id];
+        reject(new Error("Lost the connection to the Sales Coach tab (your phone may have put it to sleep). Switch to that tab for a second, come back here, and try again.")); } }, 8000);
+    }
     // Grading can take a few minutes; Apps Script allows up to 6.
     setTimeout(() => { if (relayWait[id]){ delete relayWait[id]; reject(new Error("The coach didn't answer. Make sure the Sales Coach tab is still open.")); } }, 330000);
   });
 }
+const relayAckWait = {};
 if (RELAY) window.addEventListener("message", (e) => {
   if (!GAS_PEER.test(e.origin) || !e.data) return;
-  if (e.data.t === "sc-hello"){ relayPeer = e.origin; return; }
+  if (e.data.t === "sc-hello"){
+    relayPeer = e.origin; relayAcks = !!e.data.ack; relayVersion = String(e.data.v || "");
+    if (relayVersion && relayVersion !== APP_VERSION && !APP_VERSION.startsWith("__")) toast("The Sales Coach was just updated. Close this tab and open your Sales Coach link again.");
+    return;
+  }
+  if (e.origin !== relayPeer) return;
+  if (e.data.t === "sc-ack"){ clearTimeout(relayAckWait[e.data.id]); delete relayAckWait[e.data.id]; return; }
   if (e.data.t === "sc-reply" && relayWait[e.data.id]){ const done = relayWait[e.data.id]; delete relayWait[e.data.id]; done(e.data.raw); }
 });
 // The Apps Script tab answers the voice page, only for the coach's own requests and only from the voice page's address.
@@ -886,8 +899,9 @@ if (RELAY) window.addEventListener("message", (e) => {
 const RELAY_ALLOWED = (route) => /^\/api\/[a-z-]+$/.test(route) && route !== "/api/report";
 if (GAS) window.addEventListener("message", (e) => {
   if (e.origin !== VOICE_ORIGIN || !e.data) return;
-  if (e.data.t === "sc-ready") return e.source.postMessage({ t: "sc-hello" }, e.origin);
+  if (e.data.t === "sc-ready") return e.source.postMessage({ t: "sc-hello", ack: true, v: APP_VERSION }, e.origin);
   if (e.data.t !== "sc-call") return;
+  e.source.postMessage({ t: "sc-ack", id: e.data.id }, e.origin);
   const reply = (raw) => e.source.postMessage({ t: "sc-reply", id: e.data.id, raw }, e.origin);
   if (!RELAY_ALLOWED(String(e.data.route || "").split("?")[0])) return reply(JSON.stringify({ ok: false, error: "Not allowed." }));
   google.script.run.withSuccessHandler(reply).withFailureHandler((err) => reply(JSON.stringify({ ok: false, error: serverErrorText(err) })))
@@ -954,7 +968,10 @@ let endSpeak = null; // resolves the line that's playing, so a cut-off never lea
 function stopSpeaking(){ speakSeq++; try { player.pause(); } catch {} if ("speechSynthesis" in window) speechSynthesis.cancel(); if (endSpeak) { const f = endSpeak; endSpeak = null; f(); } }
 function browserSay(text){ return new Promise((resolve)=>{ if (!("speechSynthesis" in window)) return resolve();
   const u = new SpeechSynthesisUtterance(String(text).replace(/^Coach:\s*/i,"Coach says: "));
-  if (voice) u.voice = voice; u.rate = 1.02; u.onend = u.onerror = () => resolve(); speechSynthesis.speak(u); }); }
+  if (voice) u.voice = voice; u.rate = 1.02;
+  // Some browser voices stop after about 15 seconds and never say they're done; don't let that hang the call.
+  const words = String(text).split(/\s+/).length; const t = setTimeout(() => { try { speechSynthesis.cancel(); } catch {} resolve(); }, (words / 2.5 + 3) * 1000);
+  u.onend = u.onerror = () => { clearTimeout(t); resolve(); }; speechSynthesis.speak(u); }); }
 // iPhones drop to quiet "call" audio once the mic has been used. Safari lets the page say which mode it needs:
 // "playback" while the farmer talks (full speaker volume), "play-and-record" only while the rep talks. Other phones ignore this.
 function audioMode(type){ try { if (navigator.audioSession) navigator.audioSession.type = type; } catch {} }
@@ -1007,24 +1024,31 @@ function startListening(btn, done, interim, silenceMs, keep){
   heardNow = ""; wantOn = true; sendOnEnd = false;
   listening = true; btn && btn.classList.add("on");
   openRecog();
-  // If the mic hasn't actually started in 4 seconds, say so instead of sitting there.
-  clearTimeout(micWatch);
-  const mine = recog;
-  micWatch = setTimeout(() => { if (recog === mine && listening && !mine._started){
-    try { mine.abort(); } catch {}
-    recog = null; listening = false; wantOn = false; btn && btn.classList.remove("on");
-    onInterim && onInterim(heardText(), "The mic didn't start. Tap to try again.");
-  } }, 4000);
   return true;
 }
+// If the mic hasn't actually started, say so instead of sitting there. The first time, the phone shows
+// permission prompts, so allow time to read and accept them.
+function watchMic(r){
+  clearTimeout(micWatch);
+  const ms = store.get("sc_mic_ok") ? 5000 : 25000;
+  micWatch = setTimeout(() => { if (recog === r && listening && !r._started){
+    try { r.abort(); } catch {}
+    recog = null; listening = false; wantOn = false; micBtn && micBtn.classList.remove("on");
+    onInterim && onInterim(heardText(), "The mic didn't start. Tap to try again.");
+  } }, ms);
+}
 function openRecog(){
-  const r = new Recog(); recog = r; r.lang = "en-US"; r.interimResults = true; r.continuous = true;
+  // Android Chrome repeats words in continuous mode ("so so we so we help"), so it listens one phrase at a time
+  // and the restart below stitches the phrases together.
+  const r = new Recog(); recog = r; r.lang = "en-US"; r.interimResults = true; r.continuous = !/Android/i.test(navigator.userAgent);
+  watchMic(r);
   r.onresult = (e) => { if (r !== recog) return; let t = "";
     for (let i=0;i<e.results.length;i++) t += e.results[i][0].transcript + " ";
     heardNow = t; onInterim && onInterim(heardText());
     if (endAfter){ clearTimeout(quietT); if (heardText().split(" ").length >= 3) quietT = setTimeout(()=>stopListening(true), endAfter); } };
-  r.onstart = () => { r._started = true; if (r === recog && onMicOn) onMicOn(); };
+  r.onstart = () => { r._started = true; store.set("sc_mic_ok", "1"); if (r === recog && onMicOn) onMicOn(); };
   r.onerror = (e) => {
+    if (document.hidden) return; // the phone locked or switched apps; handled when the rep comes back
     if (e.error === "not-allowed" || e.error === "service-not-allowed"){ wantOn = false; micBlockedWhy().then((why) => onInterim && onInterim(heardText(), "The mic is blocked here (" + why + "). " + KEYBOARD_TIP)); }
     else if (e.error === "audio-capture" || e.error === "network" || e.error === "language-not-supported"){
       wantOn = false; onInterim && onInterim(heardText(), `Mic problem (${e.error}). Try again, or ` + KEYBOARD_TIP.charAt(0).toLowerCase() + KEYBOARD_TIP.slice(1)); }
@@ -1038,9 +1062,10 @@ function openRecog(){
 }
 // Ask the browser directly so the rep sees its own reason, e.g. "microphone is not allowed in this document".
 async function micBlockedWhy(){
-  try { const st = await navigator.mediaDevices.getUserMedia({ audio: true }); st.getTracks().forEach((t) => t.stop()); return "speech recognition refused"; }
+  try { const st = await navigator.mediaDevices.getUserMedia({ audio: true }); st.getTracks().forEach((t) => t.stop());
+    return /iPhone|iPad/.test(navigator.userAgent) ? "speech recognition is off: turn on Siri & Dictation in Settings" : "speech recognition refused"; }
   catch (err) {
-    const said = "Chrome says: " + String(err && err.message || err && err.name || "not allowed");
+    const said = "Your browser says: " + String(err && err.message || err && err.name || "not allowed");
     // Chrome gives the same "Permission denied" for a site setting and for a page that has the mic switched off, so say which.
     return said + (MIC_BLOCKED ? "; this page's microphone is switched off by Google's frame" : "; check the mic setting for this site in Chrome");
   }
@@ -1064,6 +1089,16 @@ function stopListening(mode){
   // Some browsers never fire onend after stop(); don't hang the turn.
   setTimeout(()=>{ if (recog === r && listening && !wantOn) finishListening(); }, 1500);
 }
+
+// Locking the phone or switching apps ends the mic. Pause instead of flipping into "mic blocked",
+// and when the rep comes back, show "Tap to talk".
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden){ if (listening) stopListening("pause"); return; }
+  if (live.ctx && live.on && !state.ended) return liveCheckAudio();
+  if (!$("s-call").hidden && !state.ended && !state.busy && state.phase !== "farmer" && !listening && !state.typing && !state.muted){
+    phase("ready"); $("done-talk").innerHTML = icon("mic") + "Tap to talk"; setStatus("Your turn. Tap to talk.", "you");
+  }
+});
 
 // ---------------- Home ----------------
 function setTab(tab){
@@ -1203,6 +1238,7 @@ function openGuide(k){
 }
 // Plays the unit's saved recording (made once, not generated each time) and follows along section by section.
 let guideAudio = null; // { unit, src, pos }
+let guideLoading = false, guideSeq = 0;
 async function playGuide(){
   const u = state.path.units[state.guideUnit];
   const btn = $("guide-play");
@@ -1213,11 +1249,16 @@ async function playGuide(){
     try { player.src = SILENT_WAV; const p = player.play(); if (p) p.catch(() => {}); } catch {}
   }
   if (!guideAudio || guideAudio.unit !== u.id){
-    btn.textContent = "Loading…";
+    if (guideLoading) return;
+    btn.textContent = "Loading…"; guideLoading = true;
+    const mySeq = ++guideSeq;
     try {
       const r = await api("/api/guide-audio?unit=" + encodeURIComponent(u.id));
-      guideAudio = { unit: u.id, src: `data:audio/mp3;base64,${r.audio}`, pos: 0 };
+      guideAudio = { unit: u.id, src: `data:audio/mpeg;base64,${r.audio}`, pos: 0 };
     } catch (e) { btn.innerHTML = icon("mic") + "Listen"; return toast(e.message); }
+    finally { guideLoading = false; }
+    // The rep left the guide (or opened another) while it loaded: keep the recording, don't start playing.
+    if (mySeq !== guideSeq || $("s-guide").hidden || state.path.units[state.guideUnit] !== u){ btn.innerHTML = icon("mic") + "Listen"; return; }
   }
   if (player.src !== guideAudio.src){
     player.src = guideAudio.src;
@@ -1239,7 +1280,7 @@ async function playGuide(){
   guidePlaying = true; btn.innerHTML = "Pause";
   try { await player.play(); audioUnlocked = true; } catch { guidePlaying = false; btn.innerHTML = icon("mic") + "Listen"; toast("Tap Listen again to play."); }
 }
-function stopGuide(){ guidePlaying = false; player.ontimeupdate = null; try { player.pause(); } catch {} }
+function stopGuide(){ guidePlaying = false; guideSeq++; player.ontimeupdate = null; try { player.pause(); } catch {} }
 
 function renderUnitPath(box, u, k){
   const nodes = [...u.lessons.map((l)=>({...l, kind:"lesson"})), ...(u.checkpoint ? [{ ...u.checkpoint, icon:"trophy", kind:"checkpoint", stars:0 }] : [])];
@@ -1607,14 +1648,19 @@ $("typed").addEventListener("keydown", (e)=>{ if (e.key === "Enter") sendTyped()
 $("typed-send").onclick = sendTyped;
 $("kb-btn").onclick = () => openTyping(!state.typing);
 $("talk-btn").onclick = () => { if (state.busy || state.phase === "farmer") return; openTyping(false); };
+function liveResume(){
+  if (!live.ctx) return;
+  live.ctx.resume().then(() => { live.paused = false; phase("you"); $("done-talk").hidden = true; setStatus("Your turn. Just talk.", "you"); }, () => liveFallback("resume failed"));
+}
 $("done-talk").onclick = () => {
+  if (live.on && live.paused) return liveResume();
   if (state.retry){ state.retry = false; $("done-talk").textContent = "I'm done talking"; return farmerTurn(); }
   if (state.phase === "ready") return callListen(false, true);
   if (!listening){ sendRep(""); return; }
   stopListening(true);
 };
 // Tap the farmer to cut in while he's talking.
-$("portrait").onclick = () => { if (live.on){ liveStopPlayback(); return; } if (state.phase === "farmer"){ phase("idle"); stopSpeaking(); callListen(false, true); } };
+$("portrait").onclick = () => { if (live.on && live.paused){ return liveResume(); } if (live.on){ liveStopPlayback(); return; } if (state.phase === "farmer"){ phase("idle"); stopSpeaking(); callListen(false, true); } };
 $("mute-btn").onclick = () => {
   state.muted = !state.muted;
   if (live.on){ live.muted = state.muted; $("mute-btn").setAttribute("aria-pressed", String(state.muted));
@@ -1666,7 +1712,7 @@ const live = { on: false, ws: null, ctx: null, stream: null, node: null, nextT: 
 const liveWanted = () => store.get("sc_live") !== "off";
 // Report live-voice problems to the server so they can be diagnosed without the phone in hand.
 function liveLog(msg){ try { api("/api/clientlog", { msg: String(msg).slice(0, 300), ua: navigator.userAgent.slice(0, 200), v: APP_VERSION }).catch(() => {}); } catch {} }
-const liveAvailable = () => liveWanted() && !MIC_BLOCKED && !!(window.WebSocket && window.AudioWorkletNode && navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+const liveAvailable = () => liveWanted() && !MIC_BLOCKED && !GAS && !!(window.WebSocket && window.AudioWorkletNode && navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
 
 function liveAdd(role, text){
   if (!text) return;
@@ -1677,21 +1723,23 @@ function liveAdd(role, text){
   if (role === "farmer"){ live.farmerOpen = true; caption(cur.text.replace(/^Coach:\s*/i, "")); }
   else { caption(cur.text, true); }
 }
-function liveCloseTurn(role){ const last = state.transcript[state.transcript.length - 1]; if (last && last.role === role){ last.closed = true; if (role === "farmer") addMsg("farmer", last.text); else addMsg("rep", last.text); } }
+function liveCloseTurn(role){ const last = state.transcript[state.transcript.length - 1]; if (last && last.role === role && !last.closed){ last.closed = true; if (role === "farmer") addMsg("farmer", last.text); else addMsg("rep", last.text); } }
 function liveStopPlayback(){ for (const src of live.sources) try { src.stop(); } catch {} live.sources = []; live.nextT = 0; }
 function livePlay(b64){
   const bin = atob(b64), n = bin.length >> 1, f = new Float32Array(n);
   for (let i = 0; i < n; i++){ let v = bin.charCodeAt(2*i) | (bin.charCodeAt(2*i+1) << 8); if (v >= 32768) v -= 65536; f[i] = v / 32768; }
   const buf = live.ctx.createBuffer(1, n, 24000); buf.copyToChannel(f, 0);
-  const src = live.ctx.createBufferSource(); src.buffer = buf; src.connect(live.ctx.destination);
-  const at = Math.max(live.ctx.currentTime + 0.03, live.nextT); src.start(at); live.nextT = at + buf.duration;
+  const src = live.ctx.createBufferSource(); src.buffer = buf; src.connect(live.out || live.ctx.destination);
+  // A new sentence gets a small head start so a slow connection doesn't make it choppy.
+  const lead = live.nextT < live.ctx.currentTime ? 0.12 : 0.03;
+  const at = Math.max(live.ctx.currentTime + lead, live.nextT); src.start(at); live.nextT = at + buf.duration;
   live.sources.push(src); src.onended = () => { live.sources = live.sources.filter((x) => x !== src); };
 }
 function liveMic(frame){
   // Nothing goes out until Gemini confirms the call is set up (audio before setup stalls the connection).
   if (!live.on || !live.ws || live.ws.readyState !== 1 || live.muted || state.ended) return;
   // Downsample to 16 kHz, 16-bit, and send about every 100 ms.
-  const ratio = live.ctx.sampleRate / 16000;
+  const ratio = Math.max(1, live.ctx.sampleRate / 16000);
   for (let i = 0; i < frame.length / ratio; i++){
     const a = Math.floor(i * ratio), b = Math.min(frame.length, Math.floor((i + 1) * ratio));
     let sum = 0; for (let k = a; k < b; k++) sum += frame[k];
@@ -1705,6 +1753,8 @@ function liveMic(frame){
   if (playing && rms < LIVE_ECHO_GATE) live.buf.fill(0);
   const pcm = new Int16Array(live.buf.length); live.buf.forEach((v, i) => { pcm[i] = v < 0 ? v * 32768 : v * 32767; }); live.buf = [];
   const bytes = new Uint8Array(pcm.buffer); let bin = ""; for (let i = 0; i < bytes.length; i += 8192) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 8192));
+  // On a weak signal, don't pile up old audio (he'd answer something you said seconds ago).
+  if (live.ws.bufferedAmount > 64000){ if (!live.lagLogged){ live.lagLogged = true; liveLog("send backlog " + live.ws.bufferedAmount); } return; }
   live.ws.send(JSON.stringify({ realtimeInput: { audio: { data: btoa(bin), mimeType: "audio/pcm;rate=16000" } } }));
 }
 function liveSendText(text){
@@ -1714,12 +1764,33 @@ function liveSendText(text){
 }
 function stopLive(){
   live.on = false; clearInterval(live.ui);
+  // Detach first so a closing socket can't touch a call that's already over.
+  if (live.ws){ live.ws.onopen = live.ws.onmessage = live.ws.onerror = live.ws.onclose = null; }
   try { live.ws && live.ws.close(); } catch {}
   liveStopPlayback();
-  try { live.stream && live.stream.getTracks().forEach((t) => t.stop()); } catch {}
+  // Always release the mic, including one that arrived after the call failed to start.
+  for (const st of [live.stream, live.pendingStream]) try { st && st.getTracks().forEach((t) => t.stop()); } catch {}
   try { live.ctx && live.ctx.close(); } catch {}
-  live.ws = live.stream = live.node = live.ctx = null; live.buf = [];
+  live.ws = live.stream = live.pendingStream = live.node = live.ctx = live.out = null; live.buf = []; live.lagLogged = false; live.paused = false;
   audioMode("playback");
+}
+// Live voice failed mid-call (signal, Gemini's time limit, phone stopped the audio): keep going with standard voice.
+function liveFallback(why){
+  if (state.ended) return;
+  liveLog("dropped: " + why);
+  try { liveCloseTurn("farmer"); liveCloseTurn("rep"); } catch {}
+  stopLive();
+  toast("Live voice dropped, so the call continues with standard voice. Keep going.");
+  state.busy = false; phase("idle");
+  const last = state.transcript[state.transcript.length - 1];
+  if (last && last.role === "rep") farmerTurn(); else callListen();
+}
+// iPhones pause the call's audio for a phone call, Siri, the lock screen or AirPods. Offer a one-tap resume.
+function liveCheckAudio(){
+  if (!live.ctx || !live.on || state.ended) return;
+  const track = live.stream && live.stream.getAudioTracks()[0];
+  if (track && track.readyState === "ended") return liveFallback("mic ended");
+  if (live.ctx.state !== "running"){ live.paused = true; phase("ready"); $("done-talk").hidden = false; $("done-talk").innerHTML = icon("mic") + "Tap to resume"; setStatus("The call's audio paused. Tap to resume.", "err"); }
 }
 // Called right from the "Start the call" tap: the audio and mic must start on the tap itself.
 async function startLive(){
@@ -1729,11 +1800,15 @@ async function startLive(){
   audioMode("play-and-record");
   live.ctx = new (window.AudioContext || window.webkitAudioContext)();
   live.ctx.resume();
+  live.ctx.onstatechange = () => liveCheckAudio();
+  // His voice plays a bit louder and evened out (iPhones play it at quiet "call" volume while the mic is on).
+  try { const comp = live.ctx.createDynamicsCompressor(); const gain = live.ctx.createGain(); gain.gain.value = 1.7; comp.connect(gain); gain.connect(live.ctx.destination); live.out = comp; } catch { live.out = null; }
   const micP = navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+  micP.then((s) => { live.pendingStream = s; }, () => {}); // so a failed start can still release the mic
   setStatus("Connecting…");
   const [pass, stream] = await Promise.all([step("pass", api("/api/live", { rollToken: state.rollToken })), step("mic", micP)]);
   if (state.ended) { stream.getTracks().forEach((t) => t.stop()); return; }
-  live.stream = stream;
+  live.stream = stream; live.pendingStream = null;
   if (live.ctx.state !== "running") await step("audio", live.ctx.resume());
   const src = live.ctx.createMediaStreamSource(stream);
   const sink = live.ctx.createGain(); sink.gain.value = 0; sink.connect(live.ctx.destination);
@@ -1753,9 +1828,12 @@ async function startLive(){
     setTimeout(() => { if (!live.on) reject(new Error("setup timed out")); }, 12000);
     ws.onopen = () => ws.send(JSON.stringify({ setup: { model: pass.model } }));
     ws.onerror = () => reject(new Error("socket error"));
-    ws.onclose = (e) => { if (!live.on) return reject(new Error(`socket closed ${e.code} ${e.reason || ""}`.trim())); if (!state.ended){ live.on = false; setStatus("The call dropped. End it to get graded, or start a new one.", "err"); } };
+    ws.onclose = (e) => { if (!live.on) return reject(new Error(`socket closed ${e.code} ${e.reason || ""}`.trim())); liveFallback(`socket closed ${e.code} ${e.reason || ""}`.trim()); };
     ws.onmessage = async (ev) => {
-      const m = JSON.parse(typeof ev.data === "string" ? ev.data : await ev.data.text());
+      let m;
+      try { m = JSON.parse(typeof ev.data === "string" ? ev.data : await ev.data.text()); } catch { return; }
+      if (!live.ws || live.ws !== ws) return;
+      if (m.goAway){ toast("Live voice is about to time out; the call will switch to standard voice. Start wrapping up."); return; }
       if (m.setupComplete){
         live.on = true; resolve();
         ws.send(JSON.stringify({ realtimeInput: { text: "[The call connects.]" } }));
@@ -1771,7 +1849,7 @@ async function startLive(){
   });
   // Show who's talking: him while his audio is playing, you otherwise.
   live.ui = setInterval(() => {
-    if (!live.ctx || state.ended) return;
+    if (!live.ctx || state.ended || live.paused) return;
     const talking = live.nextT > live.ctx.currentTime + 0.05;
     if (talking && state.phase !== "farmer"){ phase("farmer"); setStatus(first() + " is talking"); }
     if (!talking && state.phase === "farmer"){ phase("you"); $("done-talk").hidden = true; setStatus(live.muted ? "You're muted." : "Your turn. Just talk.", live.muted ? "muted" : "you"); }
