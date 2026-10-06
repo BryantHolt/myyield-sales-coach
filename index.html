@@ -398,6 +398,33 @@ h1,h2,h3,.q,.unit h2,h3.section{color:var(--char);letter-spacing:-.02em}
 /* Choices, tiles, pills = the site's chips and tags */
 .pill{border-radius:6px;border:1.5px solid #CFCAC0;box-shadow:none;font-weight:700}
 .pill[aria-pressed="true"]{background:var(--char);border-color:var(--char);color:#fff;box-shadow:none}
+/* Today card: workday streak strip and daily quests */
+.today{padding:14px 16px}
+.today .trow{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.today .tstreak{display:flex;align-items:center;gap:8px;font-weight:800;color:var(--char);flex-wrap:wrap}
+.today .tstreak small{flex-basis:100%;font-weight:600;color:var(--ink-2);font-size:12.5px;margin:-4px 0 0 32px}
+.qhead{display:flex;align-items:baseline;justify-content:space-between;gap:8px;flex-wrap:wrap} .qhead b{color:var(--char)}
+.today .tstreak svg{color:var(--gold-d)}
+.wkstrip{display:flex;justify-content:space-between;margin:12px 4px 0}
+.wkday{display:flex;flex-direction:column;align-items:center;gap:3px;font-size:11px;font-weight:700;color:var(--faint)}
+.wkday i{width:32px;height:32px;border-radius:50%;background:var(--line-2);display:grid;place-items:center;color:#fff;font-style:normal}
+.wkday.done i{background:var(--gold);color:var(--char)} .wkday.now{color:var(--char)} .wkday.now i{box-shadow:0 0 0 2px var(--char)}
+.wkday i svg{width:14px;height:14px}
+.quests{margin-top:12px;border-top:1px solid var(--line);padding-top:10px}
+.quest{display:flex;align-items:center;gap:10px;margin:6px 0;font-weight:700;color:var(--char)}
+.quest .qb{flex:1;height:8px;border-radius:4px;background:var(--line-2);overflow:hidden} .quest .qb span{display:block;height:100%;background:var(--gold)}
+.quest.done{color:var(--ok)} .quest .qn{font-size:13px;color:var(--ink-2);min-width:30px;text-align:right}
+.quests small{color:var(--ink-2);font-weight:600}
+/* Lesson: review round, combo, flag */
+.retag{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--gold-d);margin:0 0 6px}
+.retag svg{width:16px;height:16px}
+.combo{position:absolute;left:58px;top:4px;font-size:11px;font-weight:800;letter-spacing:.1em;color:var(--gold-d)}
+.lessontop{position:relative}
+.bar.hot span{background:var(--gold)!important}
+.flagbtn{background:none;border:0;color:var(--ink-2);font-size:13px;font-weight:700;display:flex;align-items:center;justify-content:flex-start;gap:6px;width:100%;text-align:left;padding:6px 0 0;margin:0;cursor:pointer;text-decoration:underline;min-height:0;box-shadow:none}
+.flagbtn svg{width:14px;height:14px}
+.flagform textarea{width:100%;min-height:70px;margin:6px 0;padding:8px;border-radius:6px;border:1.5px solid #CFCAC0;font:inherit;font-size:14px;box-sizing:border-box}
+.lockcard{text-align:center;padding:22px 16px}
 .opt,.tile{border-radius:10px;border:1.5px solid var(--line);box-shadow:none}
 .opt[aria-pressed="true"]{border-color:var(--char);background:#fff;box-shadow:0 0 0 2px var(--char) inset}
 .opt.right{border-color:var(--ok);background:var(--ok-50);box-shadow:none} .opt.wrong{border-color:var(--err);background:var(--err-50);box-shadow:none}
@@ -516,7 +543,18 @@ h1,h2,h3,.q,.unit h2,h3.section{color:var(--char);letter-spacing:-.02em}
   </div></header>
 
   <main class="home">
+    <div class="wrap" id="home-err" hidden><div class="card" style="border-color:var(--err)">
+      <p style="margin:0 0 10px;font-weight:700">Couldn't load your Sales Coach.</p>
+      <p class="muted" id="home-err-msg" style="margin:0 0 12px"></p>
+      <button class="btn" id="home-retry">Try again</button>
+    </div></div>
+    <div class="wrap" id="pending-call" hidden><div class="card">
+      <p style="margin:0 0 6px;font-weight:700">You have a finished call that wasn't graded.</p>
+      <p class="muted" id="pending-call-msg" style="margin:0 0 12px"></p>
+      <button class="btn" id="pending-grade">Grade it now</button> <button class="btn ghost" id="pending-drop">Discard</button>
+    </div></div>
     <div class="wrap" id="tab-learn">
+      <div id="today"></div>
       <div id="learn"></div>
     </div>
 
@@ -574,7 +612,7 @@ h1,h2,h3,.q,.unit h2,h3.section{color:var(--char);letter-spacing:-.02em}
 
 <!-- LESSON -->
 <section class="screen" id="s-lesson" hidden>
-  <div class="wrap lessontop"><button class="x" id="lesson-x" aria-label="Quit lesson"><svg class="i"><use href="#i-x"/></svg></button><div class="bar"><span id="lesson-bar"></span></div></div>
+  <div class="wrap lessontop"><button class="x" id="lesson-x" aria-label="Quit lesson"><svg class="i"><use href="#i-x"/></svg></button><div class="bar" id="lesson-barwrap"><span id="lesson-bar"></span></div><span class="combo" id="lesson-combo" hidden></span></div>
   <div class="wrap ex" id="ex"></div>
   <div class="dock" id="lesson-dock"><div class="wrap">
     <div class="fb" id="fb" hidden></div>
@@ -836,24 +874,52 @@ function show(id){
 // - on the voice page (?relay=1, opened from Apps Script so the mic works): messages to the Apps Script tab, which runs them
 const GAS = typeof google !== "undefined" && !!(google.script && google.script.run);
 const RELAY = !GAS && /[?&]relay=1/.test(location.search);
-const APP_VERSION = "202610032214"; // stamped by appsscript/build.mjs
+const APP_VERSION = "202610061319"; // stamped by appsscript/build.mjs
 // The version in the address makes phones load a fresh copy instead of GitHub's 10-minute cache.
 const VOICE_PAGE = "https://bryantholt.github.io/myyield-sales-coach/?relay=1&v=" + APP_VERSION;
 const VOICE_ORIGIN = "https://bryantholt.github.io";
 const GAS_PEER = /^https:\/\/n-[a-z0-9-]+-script\.googleusercontent\.com$/;
-let relayPeer = null, relaySeq = 0;
+let relayPeer = null, relaySeq = 0, relayAcks = false, relayVersion = "";
+// google.script.run failures are not network problems most of the time. Say what actually went wrong.
+function serverErrorText(err){
+  const m = String((err && (err.message || err)) || "");
+  if (/PERMISSION_DENIED|unable to open|signed in to (more than one|multiple)|authuser|ScriptError.*(permission|authoriz)/i.test(m))
+    return "Google got confused about which account you're using. Open your Sales Coach link in a window signed in only to your My Yield work account (or a private/incognito window).";
+  if (/authoriz/i.test(m)) return "The Sales Coach needs to be re-approved by Bryant. Tell him you saw this.";
+  if (/too many times|quota|invoked too many/i.test(m)) return "Practice is paused for a bit (too much at once). Try again in a few minutes.";
+  if (/timed out|exceeded maximum execution time/i.test(m)) return "The coach took too long. Try again.";
+  if (/NetworkError|network|Failed to fetch|disconnected/i.test(m)) return "Couldn't reach the coach. Check your connection and try again.";
+  return "The coach hit a problem" + (m ? ": " + m.slice(0, 140) : "") + ". Try again, or reopen your Sales Coach link.";
+}
+function reportError(where, err){
+  try { if (GAS || RELAY) api("/api/clientlog", { msg: (where + ": " + String((err && (err.message || err)) || "")).slice(0, 280), ua: navigator.userAgent, v: APP_VERSION }).catch(() => {}); } catch {}
+}
 const relayWait = {};
 function relayCall(route, data){
   return new Promise((resolve, reject) => {
     if (!window.opener || window.opener.closed || !relayPeer) return reject(new Error("The Sales Coach tab that opened this page is closed. Open your Sales Coach link again."));
     const id = ++relaySeq; relayWait[id] = resolve;
     window.opener.postMessage({ t: "sc-call", id, route, data }, relayPeer);
-    setTimeout(() => { if (relayWait[id]){ delete relayWait[id]; reject(new Error("The coach didn't answer. Make sure the Sales Coach tab is still open.")); } }, 150000);
+    // An up-to-date Sales Coach tab answers "got it" right away. If it doesn't, the phone has frozen or closed that tab:
+    // say so in seconds instead of waiting minutes.
+    if (relayAcks){
+      relayAckWait[id] = setTimeout(() => { if (relayWait[id]){ delete relayWait[id]; delete relayAckWait[id];
+        reject(new Error("Lost the connection to the Sales Coach tab (your phone may have put it to sleep). Switch to that tab for a second, come back here, and try again.")); } }, 8000);
+    }
+    // Grading can take a few minutes; Apps Script allows up to 6.
+    setTimeout(() => { if (relayWait[id]){ delete relayWait[id]; reject(new Error("The coach didn't answer. Make sure the Sales Coach tab is still open.")); } }, 330000);
   });
 }
+const relayAckWait = {};
 if (RELAY) window.addEventListener("message", (e) => {
   if (!GAS_PEER.test(e.origin) || !e.data) return;
-  if (e.data.t === "sc-hello"){ relayPeer = e.origin; return; }
+  if (e.data.t === "sc-hello"){
+    relayPeer = e.origin; relayAcks = !!e.data.ack; relayVersion = String(e.data.v || "");
+    if (relayVersion && relayVersion !== APP_VERSION && !APP_VERSION.startsWith("__")) toast("The Sales Coach was just updated. Close this tab and open your Sales Coach link again.");
+    return;
+  }
+  if (e.origin !== relayPeer) return;
+  if (e.data.t === "sc-ack"){ clearTimeout(relayAckWait[e.data.id]); delete relayAckWait[e.data.id]; return; }
   if (e.data.t === "sc-reply" && relayWait[e.data.id]){ const done = relayWait[e.data.id]; delete relayWait[e.data.id]; done(e.data.raw); }
 });
 // The Apps Script tab answers the voice page, only for the coach's own requests and only from the voice page's address.
@@ -861,18 +927,19 @@ if (RELAY) window.addEventListener("message", (e) => {
 const RELAY_ALLOWED = (route) => /^\/api\/[a-z-]+$/.test(route) && route !== "/api/report";
 if (GAS) window.addEventListener("message", (e) => {
   if (e.origin !== VOICE_ORIGIN || !e.data) return;
-  if (e.data.t === "sc-ready") return e.source.postMessage({ t: "sc-hello" }, e.origin);
+  if (e.data.t === "sc-ready") return e.source.postMessage({ t: "sc-hello", ack: true, v: APP_VERSION }, e.origin);
   if (e.data.t !== "sc-call") return;
+  e.source.postMessage({ t: "sc-ack", id: e.data.id }, e.origin);
   const reply = (raw) => e.source.postMessage({ t: "sc-reply", id: e.data.id, raw }, e.origin);
   if (!RELAY_ALLOWED(String(e.data.route || "").split("?")[0])) return reply(JSON.stringify({ ok: false, error: "Not allowed." }));
-  google.script.run.withSuccessHandler(reply).withFailureHandler(() => reply(JSON.stringify({ ok: false, error: "Couldn't reach the coach. Check your connection." })))
+  google.script.run.withSuccessHandler(reply).withFailureHandler((err) => reply(JSON.stringify({ ok: false, error: serverErrorText(err) })))
     .api(e.data.route, e.data.data === undefined ? null : e.data.data);
 });
 async function api(path, data){
   if (GAS || RELAY){
     const raw = RELAY ? await relayCall(path, data === undefined ? null : data)
       : await new Promise((resolve, reject) => google.script.run.withSuccessHandler(resolve)
-        .withFailureHandler(() => reject(new Error("Couldn't reach the coach. Check your connection and try again."))).api(path, data === undefined ? null : data));
+        .withFailureHandler((err) => { if (path !== "/api/clientlog") reportError(path, err); reject(new Error(serverErrorText(err))); }).api(path, data === undefined ? null : data));
     const r = JSON.parse(raw);
     if (!r.ok){ if (r.error === "NEEDS_NAME"){ show("s-signin"); throw new Error("Tell us your name to get started."); } throw new Error(r.error); }
     return r.data;
@@ -929,7 +996,10 @@ let endSpeak = null; // resolves the line that's playing, so a cut-off never lea
 function stopSpeaking(){ speakSeq++; try { player.pause(); } catch {} if ("speechSynthesis" in window) speechSynthesis.cancel(); if (endSpeak) { const f = endSpeak; endSpeak = null; f(); } }
 function browserSay(text){ return new Promise((resolve)=>{ if (!("speechSynthesis" in window)) return resolve();
   const u = new SpeechSynthesisUtterance(String(text).replace(/^Coach:\s*/i,"Coach says: "));
-  if (voice) u.voice = voice; u.rate = 1.02; u.onend = u.onerror = () => resolve(); speechSynthesis.speak(u); }); }
+  if (voice) u.voice = voice; u.rate = 1.02;
+  // Some browser voices stop after about 15 seconds and never say they're done; don't let that hang the call.
+  const words = String(text).split(/\s+/).length; const t = setTimeout(() => { try { speechSynthesis.cancel(); } catch {} resolve(); }, (words / 2.5 + 3) * 1000);
+  u.onend = u.onerror = () => { clearTimeout(t); resolve(); }; speechSynthesis.speak(u); }); }
 // iPhones drop to quiet "call" audio once the mic has been used. Safari lets the page say which mode it needs:
 // "playback" while the farmer talks (full speaker volume), "play-and-record" only while the rep talks. Other phones ignore this.
 function audioMode(type){ try { if (navigator.audioSession) navigator.audioSession.type = type; } catch {} }
@@ -965,7 +1035,8 @@ async function say(text, role, audio){
 let recog = null, listening = false, micBtn = null, onHeard = null, onInterim = null, onMicOn = null;
 let heardBase = "", heardNow = "", wantOn = false, sendOnEnd = false, endAfter = 0, quietT = null;
 const heardText = () => (heardBase + " " + heardNow).replace(/\s+/g, " ").trim();
-let micWatch = null;
+let micWatch = null, deafRetries = 0;
+const IOS = /iPhone|iPad/.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && /Mac/.test(navigator.platform));
 function startListening(btn, done, interim, silenceMs, keep){
   if (!Recog) return false;
   if (listening){
@@ -980,26 +1051,42 @@ function startListening(btn, done, interim, silenceMs, keep){
   micBtn = btn; onHeard = done; onInterim = interim; endAfter = silenceMs || 0;
   if (!keep) heardBase = "";
   heardNow = ""; wantOn = true; sendOnEnd = false;
-  listening = true; btn && btn.classList.add("on");
-  openRecog();
-  // If the mic hasn't actually started in 4 seconds, say so instead of sitting there.
-  clearTimeout(micWatch);
-  const mine = recog;
-  micWatch = setTimeout(() => { if (recog === mine && listening && !mine._started){
-    try { mine.abort(); } catch {}
-    recog = null; listening = false; wantOn = false; btn && btn.classList.remove("on");
-    onInterim && onInterim(heardText(), "The mic didn't start. Tap to try again.");
-  } }, 4000);
+  listening = true; btn && btn.classList.add("on"); deafRetries = 1;
+  // iPhones switch the audio over to "record" a moment after we ask; a mic opened before that is deaf.
+  if (IOS) setTimeout(() => { if (wantOn && listening && !recog) openRecog(); }, 300); else openRecog();
   return true;
 }
+// If the mic hasn't actually started, say so instead of sitting there. The first time, the phone shows
+// permission prompts, so allow time to read and accept them.
+function watchMic(r){
+  clearTimeout(micWatch);
+  const ms = store.get("sc_mic_ok") ? 5000 : 25000;
+  micWatch = setTimeout(() => { if (recog === r && listening && !r._started){
+    try { r.abort(); } catch {}
+    recog = null; listening = false; wantOn = false; micBtn && micBtn.classList.remove("on");
+    onInterim && onInterim(heardText(), "The mic didn't start. Tap to try again.");
+  } }, ms);
+}
 function openRecog(){
-  const r = new Recog(); recog = r; r.lang = "en-US"; r.interimResults = true; r.continuous = true;
-  r.onresult = (e) => { if (r !== recog) return; let t = "";
+  // Android Chrome repeats words in continuous mode ("so so we so we help"), so it listens one phrase at a time
+  // and the restart below stitches the phrases together.
+  const r = new Recog(); recog = r; r.lang = "en-US"; r.interimResults = true; r.continuous = !/Android/i.test(navigator.userAgent);
+  watchMic(r);
+  r.onresult = (e) => { if (r !== recog) return; r._heard = true; let t = "";
     for (let i=0;i<e.results.length;i++) t += e.results[i][0].transcript + " ";
+    // iPhones (and some Chrome builds) quietly start a fresh results list after a pause in the middle of one mic session.
+    // Without this, everything said before the pause vanishes ("it recorded some of it, but not all").
+    const first = e.results.length ? e.results[0][0].transcript.trim().toLowerCase() : "";
+    const reset = r._len && (e.results.length < r._len || (r._final0 && first && !first.startsWith(r._first.slice(0, Math.min(12, r._first.length)))));
+    if (reset){ heardBase = heardText(); heardNow = ""; }
+    r._len = e.results.length; r._first = first; r._final0 = !!(e.results.length && e.results[0].isFinal);
     heardNow = t; onInterim && onInterim(heardText());
     if (endAfter){ clearTimeout(quietT); if (heardText().split(" ").length >= 3) quietT = setTimeout(()=>stopListening(true), endAfter); } };
-  r.onstart = () => { r._started = true; if (r === recog && onMicOn) onMicOn(); };
+  r.onstart = () => { r._started = true; store.set("sc_mic_ok", "1"); if (r === recog && onMicOn) onMicOn();
+    // The mic says it's on but hears nothing (seen on iPhones on the first tap): quietly reopen it once.
+    setTimeout(() => { if (r === recog && listening && wantOn && !r._heard && deafRetries > 0){ deafRetries--; try { r.abort(); } catch {} } }, 5000); };
   r.onerror = (e) => {
+    if (document.hidden) return; // the phone locked or switched apps; handled when the rep comes back
     if (e.error === "not-allowed" || e.error === "service-not-allowed"){ wantOn = false; micBlockedWhy().then((why) => onInterim && onInterim(heardText(), "The mic is blocked here (" + why + "). " + KEYBOARD_TIP)); }
     else if (e.error === "audio-capture" || e.error === "network" || e.error === "language-not-supported"){
       wantOn = false; onInterim && onInterim(heardText(), `Mic problem (${e.error}). Try again, or ` + KEYBOARD_TIP.charAt(0).toLowerCase() + KEYBOARD_TIP.slice(1)); }
@@ -1013,9 +1100,10 @@ function openRecog(){
 }
 // Ask the browser directly so the rep sees its own reason, e.g. "microphone is not allowed in this document".
 async function micBlockedWhy(){
-  try { const st = await navigator.mediaDevices.getUserMedia({ audio: true }); st.getTracks().forEach((t) => t.stop()); return "speech recognition refused"; }
+  try { const st = await navigator.mediaDevices.getUserMedia({ audio: true }); st.getTracks().forEach((t) => t.stop());
+    return /iPhone|iPad/.test(navigator.userAgent) ? "speech recognition is off: turn on Siri & Dictation in Settings" : "speech recognition refused"; }
   catch (err) {
-    const said = "Chrome says: " + String(err && err.message || err && err.name || "not allowed");
+    const said = "Your browser says: " + String(err && err.message || err && err.name || "not allowed");
     // Chrome gives the same "Permission denied" for a site setting and for a page that has the mic switched off, so say which.
     return said + (MIC_BLOCKED ? "; this page's microphone is switched off by Google's frame" : "; check the mic setting for this site in Chrome");
   }
@@ -1040,6 +1128,16 @@ function stopListening(mode){
   setTimeout(()=>{ if (recog === r && listening && !wantOn) finishListening(); }, 1500);
 }
 
+// Locking the phone or switching apps ends the mic. Pause instead of flipping into "mic blocked",
+// and when the rep comes back, show "Tap to talk".
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden){ if (listening) stopListening("pause"); return; }
+  if (live.ctx && live.on && !state.ended) return liveCheckAudio();
+  if (!$("s-call").hidden && !state.ended && !state.busy && state.phase !== "farmer" && !listening && !state.typing && !state.muted){
+    phase("ready"); $("done-talk").innerHTML = icon("mic") + "Tap to talk"; setStatus("Your turn. Tap to talk.", "you");
+  }
+});
+
 // ---------------- Home ----------------
 function setTab(tab){
   state.tab = tab;
@@ -1051,9 +1149,17 @@ for (const b of document.querySelectorAll(".tab")) b.onclick = () => setTab(b.da
 
 async function loadHome(){
   show("s-home"); setTab(state.tab);
-  const [me, path, opts] = await Promise.all([api("/api/me"), api("/api/path"), api("/api/start")]);
-  state.me = me.stats; state.board = me.leaderboard; state.path = path;
-  renderChips(); renderPath(); renderPractice(opts); renderBoard(); renderMe();
+  $("home-err").hidden = true;
+  try {
+    const [me, path, opts] = await Promise.all([api("/api/me"), api("/api/path"), api("/api/start")]);
+    state.me = me.stats; state.board = me.leaderboard; state.path = path;
+    renderChips(); renderToday(); renderPath(); renderPractice(opts); renderBoard(); renderMe();
+    offerPendingCall();
+  } catch (e) {
+    if (/Tell us your name/.test(e.message)) return; // the sign-in screen is already showing
+    $("home-err-msg").textContent = e.message;
+    $("home-err").hidden = false;
+  }
 }
 
 function renderChips(){
@@ -1062,6 +1168,20 @@ function renderChips(){
   $("chip-streak").querySelector("span").textContent = s.streak;
   $("chip-xp").querySelector("span").textContent = s.points;
 }
+
+// Workday streak (weekends don't break it) and today's two quests: one lesson, one practice call.
+function renderToday(){
+  const s = state.me, box = $("today");
+  if (!s || !s.weekDays){ box.innerHTML = ""; return; }
+  const q = s.quests || { lessons: 0, calls: 0 }, both = q.lessons > 0 && q.calls > 0;
+  const quest = (done, label) => `<div class="quest ${done ? "done" : ""}">${icon(done ? "check" : label === "lesson" ? "book" : "phone")}<span>${label === "lesson" ? "Finish 1 lesson" : "Do 1 practice call"}</span><span class="qb"><span style="width:${done ? 100 : 0}%"></span></span><span class="qn">${done ? 1 : 0}/1</span></div>`;
+  box.innerHTML = `<div class="card today">
+    <div class="tstreak">${icon("flame")}<span>${s.streak ? `${s.streak}-day streak` : "Start a streak today"}</span><small>Weekends don't count against you</small></div>
+    <div class="wkstrip">${s.weekDays.map((d) => `<div class="wkday ${d.done ? "done" : ""} ${d.today ? "now" : ""}"><i>${d.done ? icon("check") : ""}</i>${d.day}</div>`).join("")}</div>
+    <div class="quests"><div class="qhead"><b>Today's quests</b><small>${both ? "Done! +10 bonus points" : "Do both for +10 bonus points"}</small></div>
+      ${quest(q.lessons > 0, "lesson")}${quest(q.calls > 0, "call")}</div></div>`;
+}
+const BOARD_UNLOCK = 3;
 
 const OFFSETS = [0, 56, 84, 56, 0, -56, -84, -56];
 // Learn works like Duolingo: a Units page (every unit as a card, any can be started) and one unit's path at a time,
@@ -1078,7 +1198,7 @@ function renderPath(){
   if (state.learnView === "units" || k < 0) renderUnitList(); else renderUnit(k);
 }
 function renderUnitList(){
-  state.learnView = "units";
+  state.learnView = "units"; $("today").hidden = false;
   const units = state.path.units, here = store.get("sc_unit");
   const box = $("learn");
   box.innerHTML = `<h3 class="section" style="margin-top:18px">Units</h3><p class="sub">Start any unit. Inside a unit, each lesson unlocks the next.</p>` +
@@ -1096,7 +1216,7 @@ function renderUnitList(){
   for (const b of box.querySelectorAll(".ucard")) b.onclick = () => { store.set("sc_unit", units[+b.dataset.k].id); state.learnView = "unit"; renderUnit(+b.dataset.k); window.scrollTo(0, 0); };
 }
 function renderUnit(k){
-  state.learnView = "unit";
+  state.learnView = "unit"; $("today").hidden = true;
   const u = state.path.units[k], p = unitProgress(u);
   const box = $("learn");
   const heard = store.get("sc_guide_" + u.id);
@@ -1170,6 +1290,7 @@ function openGuide(k){
 }
 // Plays the unit's saved recording (made once, not generated each time) and follows along section by section.
 let guideAudio = null; // { unit, src, pos }
+let guideLoading = false, guideSeq = 0;
 async function playGuide(){
   const u = state.path.units[state.guideUnit];
   const btn = $("guide-play");
@@ -1180,11 +1301,16 @@ async function playGuide(){
     try { player.src = SILENT_WAV; const p = player.play(); if (p) p.catch(() => {}); } catch {}
   }
   if (!guideAudio || guideAudio.unit !== u.id){
-    btn.textContent = "Loading…";
+    if (guideLoading) return;
+    btn.textContent = "Loading…"; guideLoading = true;
+    const mySeq = ++guideSeq;
     try {
       const r = await api("/api/guide-audio?unit=" + encodeURIComponent(u.id));
-      guideAudio = { unit: u.id, src: `data:audio/mp3;base64,${r.audio}`, pos: 0 };
+      guideAudio = { unit: u.id, src: `data:audio/mpeg;base64,${r.audio}`, pos: 0 };
     } catch (e) { btn.innerHTML = icon("mic") + "Listen"; return toast(e.message); }
+    finally { guideLoading = false; }
+    // The rep left the guide (or opened another) while it loaded: keep the recording, don't start playing.
+    if (mySeq !== guideSeq || $("s-guide").hidden || state.path.units[state.guideUnit] !== u){ btn.innerHTML = icon("mic") + "Listen"; return; }
   }
   if (player.src !== guideAudio.src){
     player.src = guideAudio.src;
@@ -1206,7 +1332,7 @@ async function playGuide(){
   guidePlaying = true; btn.innerHTML = "Pause";
   try { await player.play(); audioUnlocked = true; } catch { guidePlaying = false; btn.innerHTML = icon("mic") + "Listen"; toast("Tap Listen again to play."); }
 }
-function stopGuide(){ guidePlaying = false; player.ontimeupdate = null; try { player.pause(); } catch {} }
+function stopGuide(){ guidePlaying = false; guideSeq++; player.ontimeupdate = null; try { player.pause(); } catch {} }
 
 function renderUnitPath(box, u, k){
   const nodes = [...u.lessons.map((l)=>({...l, kind:"lesson"})), ...(u.checkpoint ? [{ ...u.checkpoint, icon:"trophy", kind:"checkpoint", stars:0 }] : [])];
@@ -1249,6 +1375,11 @@ function renderPractice({ farmers, toughness, plays }){
 const MEDAL = ["#F9CD37","#AEB4BD","#C98B5B"];
 function renderBoard(){
   const box = $("lb"); box.innerHTML = "";
+  // New reps don't open the board to find themselves last: it unlocks after a few practices.
+  const doneN = state.me ? (state.me.lessonsDone || 0) + (state.me.calls || 0) : BOARD_UNLOCK;
+  $("lb-tabs").hidden = doneN < BOARD_UNLOCK;
+  if (doneN < BOARD_UNLOCK){ const left = BOARD_UNLOCK - doneN;
+    box.innerHTML = `<div class="lockcard">${Art.mascot("happy", 90)}<p style="font-weight:800;color:var(--char);margin:8px 0 4px">Unlock the leaderboard</p><p class="sub" style="margin:0">Finish ${left} more lesson${left === 1 ? "" : "s"} or practice call${left === 1 ? "" : "s"} to start competing.</p></div>`; return; }
   const rows = (state.board && state.board[state.boardTab]) || [];
   if (!rows.length){ box.innerHTML = `<div class="lbempty">${Art.mascot("happy", 90)}No one's on the board yet.<br>Your first lesson takes the top spot.</div>`; return; }
   for (const r of rows){
@@ -1347,7 +1478,7 @@ function saveProgress(){
 }
 async function openLesson(id, opts = {}){
   try { const lesson = await api("/api/path?lesson=" + encodeURIComponent(id));
-    L = { lesson, i:0, results:[], answers:[], practice: !!opts.practice };
+    L = { lesson, i:0, results:[], answers:[], practice: !!opts.practice, combo: 0, review: false, reviewTotal: 0, reviewDone: 0 };
     if (opts.start != null){
       // Jumping to a question: practice keeps nothing; going back in the current lesson keeps the answers before it.
       let p = null; try { p = JSON.parse(store.get(progressKey(id)) || "null"); } catch {}
@@ -1372,6 +1503,39 @@ function setCheck(label, enabled, cls="btn-primary"){ const b=$("check-btn"); b.
 function resetDock(){ $("lesson-dock").className="dock"; $("fb").hidden=true; $("fb").className="fb"; }
 
 function renderExercise(){
+  renderExerciseBody();
+  const n = L.lesson.exercises.length, extra = L.reviewTotal || 0;
+  $("lesson-bar").style.width = ((L.review ? n + L.reviewDone : L.i) / (n + extra) * 100) + "%";
+  if (L.review) $("ex").insertAdjacentHTML("afterbegin", `<div class="retag">↻ Previous mistake</div>`);
+  showCombo();
+}
+function showCombo(){
+  const c = (L && L.combo) || 0;
+  $("lesson-combo").hidden = c < 3; $("lesson-combo").textContent = c + " IN A ROW";
+  $("lesson-barwrap").classList.toggle("hot", c >= 5);
+}
+// After the last question, anything missed (pick-one and put-in-order) comes back until it's right.
+// Stars and points still use the first try.
+function startReview(){
+  L.missed = L.lesson.exercises.map((ex, k) => (ex.type !== "say" && L.results[k] === false ? k : -1)).filter((k) => k >= 0);
+  if (!L.missed.length) return finishLesson();
+  L.review = true; L.reviewQueue = L.missed.slice(); L.reviewTotal = L.missed.length; L.reviewDone = 0;
+  resetDock();
+  $("ex").innerHTML = `<div class="coachrow">${Art.mascot("happy", 76)}<div class="speech"><span class="k">Quick review</span>Let's go back over the ${L.missed.length === 1 ? "question" : `${L.missed.length} questions`} you missed. Mistakes help you learn.</div></div>`;
+  L.checked = true; setCheck("Continue", true);
+}
+function nextReview(){
+  if (!L.reviewQueue.length) return finishLesson();
+  L.i = L.reviewQueue.shift(); renderExercise();
+}
+// One answer checked. First pass: it counts. Review round: a miss goes to the back of the line.
+function record(right, answer){
+  if (L.review){ if (right) L.reviewDone += 1; else L.reviewQueue.push(L.i); }
+  else { L.results.push(right); L.answers[L.i] = answer; }
+  L.combo = right ? (L.combo || 0) + 1 : 0;
+  showCombo();
+}
+function renderExerciseBody(){
   resetDock();
   const ex = L.lesson.exercises[L.i];
   $("lesson-bar").style.width = (L.i / L.lesson.exercises.length * 100) + "%";
@@ -1419,34 +1583,50 @@ function sceneCard(sc, big){
     ${f("pin", sc.place)}${f("grid", sc.growers ? `Serves about ${sc.growers} growers` : Number(sc.acres).toLocaleString("en-US") + " acres")}${f("sprout", sc.crops)}${f("mega", sc.lead)}${f("home", "Talking " + sc.setting)}</ul></div></div>`;
 }
 
+const CHEERS = { 3: "3 in a row!", 5: "5 in a row! You're on fire.", 8: "8 in a row!", 10: "10 in a row! Gabe would be proud.", 15: "15 in a row!" };
 function feedback(good, title, html){
+  if (good && L && CHEERS[L.combo]) title = CHEERS[L.combo];
+  if (!good && L && L.review) title = "Not quite. Give it another try.";
   $("lesson-dock").className = "dock " + (good ? "good" : "bad");
   const fb = $("fb"); fb.hidden = false; fb.className = "fb " + (good ? "good" : "bad");
-  fb.innerHTML = `<div class="mas">${Art.mascot(good ? "happy" : "oops", 56)}</div><div><h4>${esc(title)}</h4>${html}</div>`;
+  fb.innerHTML = `<div class="mas">${Art.mascot(good ? "happy" : "oops", 56)}</div><div><h4>${esc(title)}</h4>${html}
+    <button class="flagbtn" id="flag-btn" type="button">${icon("flag")} Something wrong with this question?</button>
+    <div class="flagform" id="flag-form" hidden><textarea id="flag-note" placeholder="What's wrong? (wrong answer, confusing wording, not how we sell…)"></textarea>
+      <button class="btn btn-ghost" id="flag-send" type="button" style="min-height:40px">Send to the sales leaders</button></div></div>`;
+  $("flag-btn").onclick = () => { $("flag-form").hidden = false; $("flag-btn").hidden = true; $("flag-note").focus(); };
+  $("flag-send").onclick = async () => {
+    const note = $("flag-note").value.trim(); if (!note) return $("flag-note").focus();
+    $("flag-send").disabled = true;
+    const ex = L.lesson.exercises[L.i];
+    try { await api("/api/flag", { lessonId: L.lesson.id, index: L.i, prompt: ex.prompt, note, answer: L.answers[L.i] || null });
+      $("flag-form").innerHTML = `<p class="sub" style="margin:6px 0 0">Thanks. The sales leaders will see it.</p>`; }
+    catch (e) { $("flag-send").disabled = false; toast(e.message); }
+  };
   setCheck("Continue", true, good ? "btn-ok" : "btn-err");
 }
 
 $("check-btn").onclick = async () => {
   const ex = L.lesson.exercises[L.i];
   if (L.checked){ // continue
+    if (L.review) return nextReview();
     L.i += 1;
-    if (L.i >= L.lesson.exercises.length) return finishLesson();
+    if (L.i >= L.lesson.exercises.length) return startReview();
     saveProgress();
     return renderExercise();
   }
   if (ex.type === "choice"){
-    const right = L.chosen === ex.answer; L.checked = true; L.results.push(right); L.answers[L.i] = { chosen: L.chosen };
+    const right = L.chosen === ex.answer; L.checked = true; record(right, { chosen: L.chosen });
     const opt = (k) => $("ex").querySelector(`.opt[data-k="${k}"]`); opt(ex.answer).classList.add("right"); if (!right) opt(L.chosen).classList.add("wrong");
     feedback(right, right ? "Nice!" : "Not quite", `<p>${esc(ex.why)}</p>`);
   } else if (ex.type === "order"){
-    const right = L.order.every((k,n)=>k===n); L.checked = true; L.results.push(right); L.answers[L.i] = { order: L.order.slice() };
+    const right = L.order.every((k,n)=>k===n); L.checked = true; record(right, { order: L.order.slice() });
     feedback(right, right ? "Exactly right!" : "Close. Here's the order:", right ? `<p>${esc(ex.why)}</p>` : `<ul>${ex.items.map((t)=>`<li>${esc(t)}</li>`).join("")}</ul><p>${esc(ex.why)}</p>`);
   } else {
     stopListening(true);
     setCheck("Coach is listening…", false);
     try {
       const g = await api("/api/say", { lessonId: L.lesson.id, index: L.i, answer: $("said").value, scene: ex.scene });
-      L.checked = true; L.results.push(g.pass);
+      L.checked = true; L.results.push(g.pass); L.combo = g.pass ? (L.combo || 0) + 1 : 0; showCombo();
       L.answers[L.i] = { said: $("said").value, scene: ex.scene, score: g.score, got: g.got, missed: g.missed, feedback: g.feedback, better_line: g.better_line };
       const dots = `<div class="dots">${[1,2,3,4,5].map((k)=>`<i class="${k<=g.score?"on":""}"></i>`).join("")}</div>`;
       const got = g.got.length ? `<ul>${g.got.map((x)=>`<li>✓ ${esc(x)}</li>`).join("")}${g.missed.map((x)=>`<li>✗ ${esc(x)}</li>`).join("")}</ul>` : "";
@@ -1462,7 +1642,8 @@ async function finishLesson(){
   $("lesson-bar").style.width = "100%";
   setCheck("Saving…", false);
   try {
-    const r = await api("/api/lesson", { lessonId: L.lesson.id, results: L.results, answers: L.answers });
+    L.saveId = L.saveId || newId();
+    const r = await api("/api/lesson", { lessonId: L.lesson.id, results: L.results, answers: L.answers, saveId: L.saveId });
     state.path = r.path; state.lastLessonId = r.id; $("done-review").hidden = !r.id;
     store.del(progressKey(L.lesson.id));
     $("done-title").textContent = r.stars === 3 ? "Perfect lesson!" : "Lesson complete!";
@@ -1472,7 +1653,7 @@ async function finishLesson(){
     $("done-art").innerHTML = Art.mascot("cheer", 150);
     show("s-done"); confetti();
     say(`Lesson complete. ${r.points} points.${r.newBadges.length ? " New badge: " + r.newBadges.map((b)=>b.name).join(" and ") + "." : ""}`, "coach");
-  } catch (e) { setCheck("Try again", true); L.i -= 1; L.checked = true; toast(e.message); }
+  } catch (e) { setCheck("Try again", true); L.review = true; L.reviewQueue = []; L.checked = true; toast(e.message); }
 }
 $("done-btn").onclick = () => { stopSpeaking(); state.tab = "learn"; loadHome(); };
 $("done-review").onclick = () => { stopSpeaking(); openHistory(state.lastLessonId, "done"); };
@@ -1573,14 +1754,19 @@ $("typed").addEventListener("keydown", (e)=>{ if (e.key === "Enter") sendTyped()
 $("typed-send").onclick = sendTyped;
 $("kb-btn").onclick = () => openTyping(!state.typing);
 $("talk-btn").onclick = () => { if (state.busy || state.phase === "farmer") return; openTyping(false); };
+function liveResume(){
+  if (!live.ctx) return;
+  live.ctx.resume().then(() => { live.paused = false; phase("you"); $("done-talk").hidden = true; setStatus("Your turn. Just talk.", "you"); }, () => liveFallback("resume failed"));
+}
 $("done-talk").onclick = () => {
+  if (live.on && live.paused) return liveResume();
   if (state.retry){ state.retry = false; $("done-talk").textContent = "I'm done talking"; return farmerTurn(); }
   if (state.phase === "ready") return callListen(false, true);
   if (!listening){ sendRep(""); return; }
   stopListening(true);
 };
 // Tap the farmer to cut in while he's talking.
-$("portrait").onclick = () => { if (live.on){ liveStopPlayback(); return; } if (state.phase === "farmer"){ phase("idle"); stopSpeaking(); callListen(false, true); } };
+$("portrait").onclick = () => { if (live.on && live.paused){ return liveResume(); } if (live.on){ liveStopPlayback(); return; } if (state.phase === "farmer"){ phase("idle"); stopSpeaking(); callListen(false, true); } };
 $("mute-btn").onclick = () => {
   state.muted = !state.muted;
   if (live.on){ live.muted = state.muted; $("mute-btn").setAttribute("aria-pressed", String(state.muted));
@@ -1604,7 +1790,7 @@ $("log-sheet").onclick = (e) => { if (e.target.id === "log-sheet") $("log-sheet"
 
 function tick(){ const s = Math.floor((Date.now() - state.callT0) / 1000); $("call-timer").textContent = Math.floor(s/60) + ":" + String(s%60).padStart(2,"0"); }
 async function startCall(){
-  state.transcript = []; state.ended = false; state.busy = false; state.muted = false; state.typing = false; state.retry = false;
+  state.saveId = null; state.transcript = []; state.ended = false; state.busy = false; state.muted = false; state.typing = false; state.retry = false;
   state.startedAt = new Date().toISOString();
   $("log").innerHTML = ""; $("typerow").hidden = true; $("kb-btn").setAttribute("aria-pressed","false");
   $("mute-btn").setAttribute("aria-pressed","false"); $("mute-btn").innerHTML = icon("mic"); $("mute-lbl").textContent = "Mute";
@@ -1632,7 +1818,7 @@ const live = { on: false, ws: null, ctx: null, stream: null, node: null, nextT: 
 const liveWanted = () => store.get("sc_live") !== "off";
 // Report live-voice problems to the server so they can be diagnosed without the phone in hand.
 function liveLog(msg){ try { api("/api/clientlog", { msg: String(msg).slice(0, 300), ua: navigator.userAgent.slice(0, 200), v: APP_VERSION }).catch(() => {}); } catch {} }
-const liveAvailable = () => liveWanted() && !MIC_BLOCKED && !!(window.WebSocket && window.AudioWorkletNode && navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+const liveAvailable = () => liveWanted() && !MIC_BLOCKED && !GAS && !!(window.WebSocket && window.AudioWorkletNode && navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
 
 function liveAdd(role, text){
   if (!text) return;
@@ -1643,21 +1829,23 @@ function liveAdd(role, text){
   if (role === "farmer"){ live.farmerOpen = true; caption(cur.text.replace(/^Coach:\s*/i, "")); }
   else { caption(cur.text, true); }
 }
-function liveCloseTurn(role){ const last = state.transcript[state.transcript.length - 1]; if (last && last.role === role){ last.closed = true; if (role === "farmer") addMsg("farmer", last.text); else addMsg("rep", last.text); } }
+function liveCloseTurn(role){ const last = state.transcript[state.transcript.length - 1]; if (last && last.role === role && !last.closed){ last.closed = true; if (role === "farmer") addMsg("farmer", last.text); else addMsg("rep", last.text); } }
 function liveStopPlayback(){ for (const src of live.sources) try { src.stop(); } catch {} live.sources = []; live.nextT = 0; }
 function livePlay(b64){
   const bin = atob(b64), n = bin.length >> 1, f = new Float32Array(n);
   for (let i = 0; i < n; i++){ let v = bin.charCodeAt(2*i) | (bin.charCodeAt(2*i+1) << 8); if (v >= 32768) v -= 65536; f[i] = v / 32768; }
   const buf = live.ctx.createBuffer(1, n, 24000); buf.copyToChannel(f, 0);
-  const src = live.ctx.createBufferSource(); src.buffer = buf; src.connect(live.ctx.destination);
-  const at = Math.max(live.ctx.currentTime + 0.03, live.nextT); src.start(at); live.nextT = at + buf.duration;
+  const src = live.ctx.createBufferSource(); src.buffer = buf; src.connect(live.out || live.ctx.destination);
+  // A new sentence gets a small head start so a slow connection doesn't make it choppy.
+  const lead = live.nextT < live.ctx.currentTime ? 0.12 : 0.03;
+  const at = Math.max(live.ctx.currentTime + lead, live.nextT); src.start(at); live.nextT = at + buf.duration;
   live.sources.push(src); src.onended = () => { live.sources = live.sources.filter((x) => x !== src); };
 }
 function liveMic(frame){
   // Nothing goes out until Gemini confirms the call is set up (audio before setup stalls the connection).
   if (!live.on || !live.ws || live.ws.readyState !== 1 || live.muted || state.ended) return;
   // Downsample to 16 kHz, 16-bit, and send about every 100 ms.
-  const ratio = live.ctx.sampleRate / 16000;
+  const ratio = Math.max(1, live.ctx.sampleRate / 16000);
   for (let i = 0; i < frame.length / ratio; i++){
     const a = Math.floor(i * ratio), b = Math.min(frame.length, Math.floor((i + 1) * ratio));
     let sum = 0; for (let k = a; k < b; k++) sum += frame[k];
@@ -1671,6 +1859,8 @@ function liveMic(frame){
   if (playing && rms < LIVE_ECHO_GATE) live.buf.fill(0);
   const pcm = new Int16Array(live.buf.length); live.buf.forEach((v, i) => { pcm[i] = v < 0 ? v * 32768 : v * 32767; }); live.buf = [];
   const bytes = new Uint8Array(pcm.buffer); let bin = ""; for (let i = 0; i < bytes.length; i += 8192) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 8192));
+  // On a weak signal, don't pile up old audio (he'd answer something you said seconds ago).
+  if (live.ws.bufferedAmount > 64000){ if (!live.lagLogged){ live.lagLogged = true; liveLog("send backlog " + live.ws.bufferedAmount); } return; }
   live.ws.send(JSON.stringify({ realtimeInput: { audio: { data: btoa(bin), mimeType: "audio/pcm;rate=16000" } } }));
 }
 function liveSendText(text){
@@ -1680,12 +1870,33 @@ function liveSendText(text){
 }
 function stopLive(){
   live.on = false; clearInterval(live.ui);
+  // Detach first so a closing socket can't touch a call that's already over.
+  if (live.ws){ live.ws.onopen = live.ws.onmessage = live.ws.onerror = live.ws.onclose = null; }
   try { live.ws && live.ws.close(); } catch {}
   liveStopPlayback();
-  try { live.stream && live.stream.getTracks().forEach((t) => t.stop()); } catch {}
+  // Always release the mic, including one that arrived after the call failed to start.
+  for (const st of [live.stream, live.pendingStream]) try { st && st.getTracks().forEach((t) => t.stop()); } catch {}
   try { live.ctx && live.ctx.close(); } catch {}
-  live.ws = live.stream = live.node = live.ctx = null; live.buf = [];
+  live.ws = live.stream = live.pendingStream = live.node = live.ctx = live.out = null; live.buf = []; live.lagLogged = false; live.paused = false;
   audioMode("playback");
+}
+// Live voice failed mid-call (signal, Gemini's time limit, phone stopped the audio): keep going with standard voice.
+function liveFallback(why){
+  if (state.ended) return;
+  liveLog("dropped: " + why);
+  try { liveCloseTurn("farmer"); liveCloseTurn("rep"); } catch {}
+  stopLive();
+  toast("Live voice dropped, so the call continues with standard voice. Keep going.");
+  state.busy = false; phase("idle");
+  const last = state.transcript[state.transcript.length - 1];
+  if (last && last.role === "rep") farmerTurn(); else callListen();
+}
+// iPhones pause the call's audio for a phone call, Siri, the lock screen or AirPods. Offer a one-tap resume.
+function liveCheckAudio(){
+  if (!live.ctx || !live.on || state.ended) return;
+  const track = live.stream && live.stream.getAudioTracks()[0];
+  if (track && track.readyState === "ended") return liveFallback("mic ended");
+  if (live.ctx.state !== "running"){ live.paused = true; phase("ready"); $("done-talk").hidden = false; $("done-talk").innerHTML = icon("mic") + "Tap to resume"; setStatus("The call's audio paused. Tap to resume.", "err"); }
 }
 // Called right from the "Start the call" tap: the audio and mic must start on the tap itself.
 async function startLive(){
@@ -1695,11 +1906,15 @@ async function startLive(){
   audioMode("play-and-record");
   live.ctx = new (window.AudioContext || window.webkitAudioContext)();
   live.ctx.resume();
+  live.ctx.onstatechange = () => liveCheckAudio();
+  // His voice plays a bit louder and evened out (iPhones play it at quiet "call" volume while the mic is on).
+  try { const comp = live.ctx.createDynamicsCompressor(); const gain = live.ctx.createGain(); gain.gain.value = 1.7; comp.connect(gain); gain.connect(live.ctx.destination); live.out = comp; } catch { live.out = null; }
   const micP = navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+  micP.then((s) => { live.pendingStream = s; }, () => {}); // so a failed start can still release the mic
   setStatus("Connecting…");
   const [pass, stream] = await Promise.all([step("pass", api("/api/live", { rollToken: state.rollToken })), step("mic", micP)]);
   if (state.ended) { stream.getTracks().forEach((t) => t.stop()); return; }
-  live.stream = stream;
+  live.stream = stream; live.pendingStream = null;
   if (live.ctx.state !== "running") await step("audio", live.ctx.resume());
   const src = live.ctx.createMediaStreamSource(stream);
   const sink = live.ctx.createGain(); sink.gain.value = 0; sink.connect(live.ctx.destination);
@@ -1719,9 +1934,12 @@ async function startLive(){
     setTimeout(() => { if (!live.on) reject(new Error("setup timed out")); }, 12000);
     ws.onopen = () => ws.send(JSON.stringify({ setup: { model: pass.model } }));
     ws.onerror = () => reject(new Error("socket error"));
-    ws.onclose = (e) => { if (!live.on) return reject(new Error(`socket closed ${e.code} ${e.reason || ""}`.trim())); if (!state.ended){ live.on = false; setStatus("The call dropped. End it to get graded, or start a new one.", "err"); } };
+    ws.onclose = (e) => { if (!live.on) return reject(new Error(`socket closed ${e.code} ${e.reason || ""}`.trim())); liveFallback(`socket closed ${e.code} ${e.reason || ""}`.trim()); };
     ws.onmessage = async (ev) => {
-      const m = JSON.parse(typeof ev.data === "string" ? ev.data : await ev.data.text());
+      let m;
+      try { m = JSON.parse(typeof ev.data === "string" ? ev.data : await ev.data.text()); } catch { return; }
+      if (!live.ws || live.ws !== ws) return;
+      if (m.goAway){ toast("Live voice is about to time out; the call will switch to standard voice. Start wrapping up."); return; }
       if (m.setupComplete){
         live.on = true; resolve();
         ws.send(JSON.stringify({ realtimeInput: { text: "[The call connects.]" } }));
@@ -1737,7 +1955,7 @@ async function startLive(){
   });
   // Show who's talking: him while his audio is playing, you otherwise.
   live.ui = setInterval(() => {
-    if (!live.ctx || state.ended) return;
+    if (!live.ctx || state.ended || live.paused) return;
     const talking = live.nextT > live.ctx.currentTime + 0.05;
     if (talking && state.phase !== "farmer"){ phase("farmer"); setStatus(first() + " is talking"); }
     if (!talking && state.phase === "farmer"){ phase("you"); $("done-talk").hidden = true; setStatus(live.muted ? "You're muted." : "Your turn. Just talk.", live.muted ? "muted" : "you"); }
@@ -1773,10 +1991,33 @@ $("end-yes").onclick = async () => {
   if (pending && !state.busy) state.transcript.push({ role:"rep", text: pending });
   if (!state.transcript.some((m)=>m.role==="rep")) return loadHome();
   $("grading-art").innerHTML = Art.mascot("think", 110); $("grading").hidden = false;
-  try { renderResults(await api("/api/grade", { rollToken: state.rollToken, transcript: state.transcript, startedAt: state.startedAt, checkpoint: state.checkpoint })); }
+  state.saveId = state.saveId || newId();
+  const job = { rollToken: state.rollToken, transcript: state.transcript, startedAt: state.startedAt, checkpoint: state.checkpoint, saveId: state.saveId,
+    farmerName: state.farmerName, callPlayName: state.callPlayName, at: Date.now() };
+  store.set("sc_pending_call", JSON.stringify(job));
+  try { renderResults(await api("/api/grade", gradeBody(job))); store.del("sc_pending_call"); }
   catch (e) { state.ended = false; state.timer = setInterval(tick, 1000); setStatus(e.message, "err"); phase("idle"); toast(e.message); }
   finally { $("grading").hidden = true; }
 };
+const gradeBody = (j) => ({ rollToken: j.rollToken, transcript: j.transcript, startedAt: j.startedAt, checkpoint: j.checkpoint, saveId: j.saveId });
+function newId(){ try { return crypto.randomUUID(); } catch { return Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 12); } }
+// A call that ended but never got graded (app closed, connection dropped) stays on the phone and can be graded later.
+function pendingCall(){ try { const j = JSON.parse(store.get("sc_pending_call") || "null"); return j && j.rollToken && Array.isArray(j.transcript) && Date.now() - j.at < 3 * 864e5 ? j : null; } catch { return null; } }
+function offerPendingCall(){
+  const j = pendingCall();
+  $("pending-call").hidden = !j;
+  if (j) $("pending-call-msg").textContent = `Call with ${j.farmerName || "the farmer"}${j.callPlayName ? " · " + j.callPlayName : ""}, ${when(new Date(j.at).toISOString())}.`;
+}
+$("pending-drop").onclick = () => { store.del("sc_pending_call"); $("pending-call").hidden = true; };
+$("pending-grade").onclick = async () => {
+  const j = pendingCall(); if (!j) return offerPendingCall();
+  state.farmerName = j.farmerName || ""; state.callPlayName = j.callPlayName || ""; state.saveId = j.saveId;
+  $("grading-art").innerHTML = Art.mascot("think", 110); $("grading").hidden = false;
+  try { const r = await api("/api/grade", gradeBody(j)); store.del("sc_pending_call"); show("s-results"); renderResults(r); }
+  catch (e) { toast(e.message); if (/expired/i.test(e.message)) { store.del("sc_pending_call"); $("pending-call").hidden = true; } }
+  finally { $("grading").hidden = true; }
+};
+$("home-retry").onclick = () => loadHome();
 
 function renderResults({ overall, grade, game, transcript, scene, at, checkpoint, points }, review){
   state.reviewing = !!review;
@@ -1792,7 +2033,7 @@ function renderResults({ overall, grade, game, transcript, scene, at, checkpoint
     rw.push(`<span class="pill" style="border-color:var(--gold);background:var(--gold-50);color:var(--gold-ink)">🔥 ${game.streak}-day streak</span>`);
     if (game.newBest) rw.push(`<span class="pill" style="border-color:var(--ok);color:var(--ok-d)">New personal best</span>`);
     if (game.weekRank) rw.push(`<span class="pill">#${game.weekRank} this week</span>`);
-    if (game.unitComplete) rw.push(`<span class="pill" style="border-color:var(--gold);background:var(--gold-50)">🏆 Play 1 complete</span>`);
+    if (game.unitComplete) rw.push(`<span class="pill" style="border-color:var(--gold);background:var(--gold-50)">🏆 ${esc(game.unitName || "Unit")} complete</span>`);
   } else if (game && !review) rw.push(`<span class="pill">Calls need 4+ real answers to earn points</span>`);
   if (review && points) rw.push(`<span class="pill" style="border-color:var(--gold);background:var(--gold-50);color:var(--gold-ink)">⚡ +${points} points</span>`);
   $("res-reward").innerHTML = rw.join("");
