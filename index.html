@@ -887,7 +887,7 @@ function show(id){
 // - on the voice page (?relay=1, opened from Apps Script so the mic works): messages to the Apps Script tab, which runs them
 const GAS = typeof google !== "undefined" && !!(google.script && google.script.run);
 const RELAY = !GAS && /[?&]relay=1/.test(location.search);
-const APP_VERSION = "v44e9c70d81"; // stamped by appsscript/build.mjs
+const APP_VERSION = "vebf51095e5"; // stamped by appsscript/build.mjs
 // The version in the address makes phones load a fresh copy instead of GitHub's 10-minute cache.
 const VOICE_PAGE = "https://bryantholt.github.io/myyield-sales-coach/?relay=1&v=" + APP_VERSION;
 const VOICE_ORIGIN = "https://bryantholt.github.io";
@@ -1901,11 +1901,21 @@ function liveMic(frame){
   // louder than speaker leak. Quiet audio goes out as silence, so he can't hear himself as "the rep".
   const playing = live.nextT > live.ctx.currentTime - 0.35;
   const rms = Math.sqrt(live.buf.reduce((n, v) => n + v * v, 0) / live.buf.length);
-  if (playing && rms < LIVE_ECHO_GATE) live.buf.fill(0);
-  const pcm = new Int16Array(live.buf.length); live.buf.forEach((v, i) => { pcm[i] = v < 0 ? v * 32768 : v * 32767; }); live.buf = [];
-  const bytes = new Uint8Array(pcm.buffer); let bin = ""; for (let i = 0; i < bytes.length; i += 8192) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 8192));
+  const chunk = live.buf; live.buf = [];
+  // Noise guard: while he's talking, a short burst (a cough, a door, a dog) shouldn't cut him off. Loud audio is
+  // held back until it lasts about 0.3 seconds, which real talking does, then sent all at once so no words are lost.
+  if (!playing){ liveFlushHeld(); return liveSendPcm(chunk); }
+  if (rms < LIVE_ECHO_GATE){ live.held = []; return liveSendPcm(chunk.map(() => 0)); }
+  live.held = (live.held || []).concat([chunk]);
+  if (live.held.length < 3) return liveSendPcm(chunk.map(() => 0));
+  liveFlushHeld();
+}
+function liveFlushHeld(){ const h = live.held || []; live.held = []; for (const c of h) liveSendPcm(c); }
+function liveSendPcm(samples){
   // On a weak signal, don't pile up old audio (he'd answer something you said seconds ago).
   if (live.ws.bufferedAmount > 64000){ if (!live.lagLogged){ live.lagLogged = true; liveLog("send backlog " + live.ws.bufferedAmount); } return; }
+  const pcm = new Int16Array(samples.length); samples.forEach((v, i) => { pcm[i] = v < 0 ? v * 32768 : v * 32767; });
+  const bytes = new Uint8Array(pcm.buffer); let bin = ""; for (let i = 0; i < bytes.length; i += 8192) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 8192));
   live.ws.send(JSON.stringify({ realtimeInput: { audio: { data: btoa(bin), mimeType: "audio/pcm;rate=16000" } } }));
 }
 function liveSendText(text){
@@ -1922,7 +1932,7 @@ function stopLive(){
   // Always release the mic, including one that arrived after the call failed to start.
   for (const st of [live.stream, live.pendingStream]) try { st && st.getTracks().forEach((t) => t.stop()); } catch {}
   try { live.ctx && live.ctx.close(); } catch {}
-  live.ws = live.stream = live.pendingStream = live.node = live.ctx = live.out = null; live.buf = []; live.lagLogged = false; live.paused = false;
+  live.ws = live.stream = live.pendingStream = live.node = live.ctx = live.out = null; live.buf = []; live.held = []; live.lagLogged = false; live.paused = false;
   audioMode("playback");
 }
 // Live voice failed mid-call (signal, Gemini's time limit, phone stopped the audio): keep going with standard voice.
@@ -1954,7 +1964,8 @@ async function startLive(){
   live.ctx.onstatechange = () => liveCheckAudio();
   // His voice plays a bit louder and evened out (iPhones play it at quiet "call" volume while the mic is on).
   try { const comp = live.ctx.createDynamicsCompressor(); const gain = live.ctx.createGain(); gain.gain.value = 1.7; comp.connect(gain); gain.connect(live.ctx.destination); live.out = comp; } catch { live.out = null; }
-  const micP = navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+  // voiceIsolation: newer phones can filter out everything but the voice; browsers that don't know it ignore it.
+  const micP = navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, voiceIsolation: true } });
   micP.then((s) => { live.pendingStream = s; }, () => {}); // so a failed start can still release the mic
   setStatus("Connecting…");
   const [pass, stream] = await Promise.all([step("pass", api("/api/live", { rollToken: state.rollToken })), step("mic", micP)]);
