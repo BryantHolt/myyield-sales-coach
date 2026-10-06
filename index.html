@@ -912,7 +912,7 @@ function show(id){
 // - on the voice page (?relay=1, opened from Apps Script so the mic works): messages to the Apps Script tab, which runs them
 const GAS = typeof google !== "undefined" && !!(google.script && google.script.run);
 const RELAY = !GAS && /[?&]relay=1/.test(location.search);
-const APP_VERSION = "v4256772502"; // stamped by appsscript/build.mjs
+const APP_VERSION = "v749879b6f0"; // stamped by appsscript/build.mjs
 // The version in the address makes phones load a fresh copy instead of GitHub's 10-minute cache.
 const VOICE_PAGE = "https://bryantholt.github.io/myyield-sales-coach/?relay=1&v=" + APP_VERSION;
 const VOICE_ORIGIN = "https://bryantholt.github.io";
@@ -1250,9 +1250,18 @@ function stopListening(mode){
 
 // Locking the phone or switching apps ends the mic. Pause instead of flipping into "mic blocked",
 // and when the rep comes back, show "Tap to talk".
+// Coming back from an iPhone banner, the notification shade or a phone call: pick the farmer's voice back up.
+function backFromInterruption(){
+  pageBackAt = Date.now();
+  if (state.ended || $("s-call").hidden) return;
+  if (live.on) return liveCheckAudio();
+  if (state.phase === "farmer" && player.getAttribute("src") && player.paused && !player.ended) player.play().catch(() => {});
+}
+window.addEventListener("focus", backFromInterruption);
 document.addEventListener("visibilitychange", () => {
   if (document.hidden){ if (listening) stopListening("pause"); return; }
-  if (live.ctx && live.on && !state.ended) return liveCheckAudio();
+  backFromInterruption();
+  if (live.on) return;
   if (!$("s-call").hidden && !state.ended && !state.busy && state.phase !== "farmer" && !listening && !state.typing && !state.muted){
     phase("ready"); $("done-talk").innerHTML = icon("mic") + "Tap to talk"; setStatus("Your turn. Tap to talk.", "you");
   }
@@ -1894,7 +1903,17 @@ $("done-talk").onclick = () => {
   stopListening(true);
 };
 // Tap the farmer to cut in while he's talking.
-$("portrait").onclick = () => { if (live.on && live.paused){ return liveResume(); } if (live.on){ liveStopPlayback(); return; } if (state.phase === "farmer"){ phase("idle"); stopSpeaking(); callListen(false, true); } };
+// Tap the farmer to cut in (standard voice only; in a live call you cut in by talking). Only a real tap counts:
+// not a swipe (like flicking away the iPhone mic banner) and not a touch right after coming back to the page.
+let tapStart = null, pageBackAt = 0;
+$("portrait").addEventListener("pointerdown", (e) => { tapStart = { x: e.clientX, y: e.clientY, t: Date.now() }; });
+const realTap = (e) => !!tapStart && Date.now() - tapStart.t < 600 && Math.hypot(e.clientX - tapStart.x, e.clientY - tapStart.y) < 14 && Date.now() - pageBackAt > 1500;
+$("portrait").onclick = (e) => {
+  if (live.on && live.paused) return liveResume();
+  if (live.on) return;
+  if (!realTap(e)) return;
+  if (state.phase === "farmer"){ phase("idle"); stopSpeaking(); callListen(false, true); }
+};
 $("mute-btn").onclick = () => {
   state.muted = !state.muted;
   if (live.on){ live.muted = state.muted; $("mute-btn").setAttribute("aria-pressed", String(state.muted));
@@ -2034,7 +2053,15 @@ function liveCheckAudio(){
   if (!live.ctx || !live.on || state.ended) return;
   const track = live.stream && live.stream.getAudioTracks()[0];
   if (track && track.readyState === "ended") return liveFallback("mic ended");
-  if (live.ctx.state !== "running"){ live.paused = true; phase("ready"); $("done-talk").hidden = false; $("done-talk").innerHTML = icon("mic") + "Tap to resume"; setStatus("The call's audio paused. Tap to resume.", "err"); }
+  if (live.ctx.state === "running"){ if (live.paused){ live.paused = false; phase("you"); $("done-talk").hidden = true; setStatus("Your turn. Just talk.", "you"); } return; }
+  // iPhones pause the call's audio for banners, Siri or a phone call. Try to pick it back up on our own once the
+  // rep is back; only ask for a tap if the phone won't allow it.
+  if (document.hidden) return;
+  live.ctx.resume().catch(() => {});
+  setTimeout(() => {
+    if (!live.ctx || !live.on || state.ended || live.ctx.state === "running") return;
+    live.paused = true; phase("ready"); $("done-talk").hidden = false; $("done-talk").innerHTML = icon("mic") + "Tap to resume"; setStatus("The call's audio paused. Tap to resume.", "err");
+  }, 700);
 }
 // Called right from the "Start the call" tap: the audio and mic must start on the tap itself.
 async function startLive(){
