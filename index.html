@@ -264,6 +264,12 @@ textarea.said:focus{border-color:var(--blue)}
 .qrow[disabled]{opacity:.5}
 .qn{width:28px;height:28px;flex:none;border-radius:50%;display:grid;place-items:center;font-weight:800;font-size:13px;background:var(--line-2);color:var(--char)}
 .qrow.ok .qn{background:var(--ok-50);color:var(--ok-d)}
+.qrow.ok:not(.next){background:var(--bg);border-color:transparent} .qrow.ok .qt{color:var(--ink-2);font-weight:500}
+.qrow.next{border:2px solid var(--char);box-shadow:0 0 0 4px var(--gold-50);align-items:center}
+.qrow.next .qn{background:var(--char);color:var(--gold)} .qrow.next .qt small{color:var(--gold-d)}
+.qgo{margin-left:auto;flex:none;transform:rotate(180deg);display:grid;place-items:center;color:var(--char)} .qgo svg{width:18px;height:18px}
+.qprog{display:flex;align-items:center;gap:10px;margin:8px 0 0;font-size:13px;color:var(--ink-2)} .qprog b{white-space:nowrap}
+.qbar{flex:1;height:8px;border-radius:4px;background:var(--line-2);overflow:hidden} .qbar span{display:block;height:100%;background:var(--ok)}
 .qn svg.i{width:16px;height:16px}
 .qt{font-size:14px;font-weight:600;color:var(--char);line-height:1.35}
 .qt small{display:block;font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--blue);margin-bottom:2px}
@@ -425,6 +431,12 @@ h1,h2,h3,.q,.unit h2,h3.section{color:var(--char);letter-spacing:-.02em}
 .flagbtn svg{width:14px;height:14px}
 .flagform textarea{width:100%;min-height:70px;margin:6px 0;padding:8px;border-radius:6px;border:1.5px solid #CFCAC0;font:inherit;font-size:14px;box-sizing:border-box}
 .lockcard{text-align:center;padding:22px 16px}
+#busy{position:fixed;inset:0 0 auto 0;z-index:200;pointer-events:none}
+.busybar{height:4px;background:linear-gradient(90deg,transparent,var(--gold),transparent);background-size:50% 100%;background-repeat:no-repeat;animation:busy 1s linear infinite}
+@keyframes busy{0%{background-position:-50% 0}100%{background-position:150% 0}}
+.busypill{position:absolute;top:70px;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:8px;background:var(--char);color:#fff;font-weight:700;font-size:14px;padding:8px 14px;border-radius:20px;box-shadow:0 4px 14px rgba(0,0,0,.18)}
+.spin{width:14px;height:14px;border-radius:50%;border:2px solid rgba(255,255,255,.3);border-top-color:var(--gold);animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
 .opt,.tile{border-radius:10px;border:1.5px solid var(--line);box-shadow:none}
 .opt[aria-pressed="true"]{border-color:var(--char);background:#fff;box-shadow:0 0 0 2px var(--char) inset}
 .opt.right{border-color:var(--ok);background:var(--ok-50);box-shadow:none} .opt.wrong{border-color:var(--err);background:var(--err-50);box-shadow:none}
@@ -464,6 +476,7 @@ h1,h2,h3,.q,.unit h2,h3.section{color:var(--char);letter-spacing:-.02em}
 </style>
 </head>
 <body>
+<div id="busy" hidden><div class="busybar"></div><div class="busypill"><span class="spin"></span>Loading…</div></div>
 
 <!-- ICONS -->
 <svg width="0" height="0" style="position:absolute">
@@ -874,7 +887,7 @@ function show(id){
 // - on the voice page (?relay=1, opened from Apps Script so the mic works): messages to the Apps Script tab, which runs them
 const GAS = typeof google !== "undefined" && !!(google.script && google.script.run);
 const RELAY = !GAS && /[?&]relay=1/.test(location.search);
-const APP_VERSION = "v10e0e1ff3b"; // stamped by appsscript/build.mjs
+const APP_VERSION = "v44e9c70d81"; // stamped by appsscript/build.mjs
 // The version in the address makes phones load a fresh copy instead of GitHub's 10-minute cache.
 const VOICE_PAGE = "https://bryantholt.github.io/myyield-sales-coach/?relay=1&v=" + APP_VERSION;
 const VOICE_ORIGIN = "https://bryantholt.github.io";
@@ -935,7 +948,21 @@ if (GAS) window.addEventListener("message", (e) => {
   google.script.run.withSuccessHandler(reply).withFailureHandler((err) => reply(JSON.stringify({ ok: false, error: serverErrorText(err) })))
     .api(e.data.route, e.data.data === undefined ? null : e.data.data);
 });
+// Anything that takes a moment shows a loading bar, so a tap never looks ignored.
+// Calls and grading have their own "thinking" states, and logging runs in the background, so they're left out.
+const QUIET = /^\/api\/(turn|tts|say|grade|live|clientlog|flag)\b/;
+let busyN = 0, busyT = null;
+function busy(on){
+  busyN = Math.max(0, busyN + (on ? 1 : -1));
+  clearTimeout(busyT);
+  if (busyN) busyT = setTimeout(() => { $("busy").hidden = false; }, 250); else $("busy").hidden = true;
+}
 async function api(path, data){
+  if (QUIET.test(path)) return apiRaw(path, data);
+  busy(true);
+  try { return await apiRaw(path, data); } finally { busy(false); }
+}
+async function apiRaw(path, data){
   if (GAS || RELAY){
     const raw = RELAY ? await relayCall(path, data === undefined ? null : data)
       : await new Promise((resolve, reject) => google.script.run.withSuccessHandler(resolve)
@@ -1035,7 +1062,7 @@ async function say(text, role, audio){
 let recog = null, listening = false, micBtn = null, onHeard = null, onInterim = null, onMicOn = null;
 let heardBase = "", heardNow = "", wantOn = false, sendOnEnd = false, endAfter = 0, quietT = null;
 const heardText = () => (heardBase + " " + heardNow).replace(/\s+/g, " ").trim();
-let micWatch = null, deafRetries = 0;
+let micWatch = null;
 const IOS = /iPhone|iPad/.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && /Mac/.test(navigator.platform));
 function startListening(btn, done, interim, silenceMs, keep){
   if (!Recog) return false;
@@ -1051,9 +1078,9 @@ function startListening(btn, done, interim, silenceMs, keep){
   micBtn = btn; onHeard = done; onInterim = interim; endAfter = silenceMs || 0;
   if (!keep) heardBase = "";
   heardNow = ""; wantOn = true; sendOnEnd = false;
-  listening = true; btn && btn.classList.add("on"); deafRetries = 1;
-  // iPhones switch the audio over to "record" a moment after we ask; a mic opened before that is deaf.
-  if (IOS) setTimeout(() => { if (wantOn && listening && !recog) openRecog(); }, 300); else openRecog();
+  listening = true; btn && btn.classList.add("on");
+  // Must run inside the tap: on iPhones a mic started later (from a timer) says it's listening but hears nothing.
+  openRecog();
   return true;
 }
 // If the mic hasn't actually started, say so instead of sitting there. The first time, the phone shows
@@ -1082,9 +1109,10 @@ function openRecog(){
     r._len = e.results.length; r._first = first; r._final0 = !!(e.results.length && e.results[0].isFinal);
     heardNow = t; onInterim && onInterim(heardText());
     if (endAfter){ clearTimeout(quietT); if (heardText().split(" ").length >= 3) quietT = setTimeout(()=>stopListening(true), endAfter); } };
-  r.onstart = () => { r._started = true; store.set("sc_mic_ok", "1"); if (r === recog && onMicOn) onMicOn();
-    // The mic says it's on but hears nothing (seen on iPhones on the first tap): quietly reopen it once.
-    setTimeout(() => { if (r === recog && listening && wantOn && !r._heard && deafRetries > 0){ deafRetries--; try { r.abort(); } catch {} } }, 5000); };
+  r.onstart = () => { r._started = true; r._t0 = Date.now(); store.set("sc_mic_ok", "1"); if (r === recog && onMicOn) onMicOn();
+    // iPhones sometimes open a mic that hears nothing. Say so, and let a fresh tap (which does work) start it again.
+    if (IOS) setTimeout(() => { if (r === recog && listening && !r._heard){ micLog(r, "no words in 7s");
+      stopListening("pause"); onInterim && onInterim(heardText(), "I didn't catch anything. Tap the mic and talk again."); } }, 7000); };
   r.onerror = (e) => {
     if (document.hidden) return; // the phone locked or switched apps; handled when the rep comes back
     if (e.error === "not-allowed" || e.error === "service-not-allowed"){ wantOn = false; micBlockedWhy().then((why) => onInterim && onInterim(heardText(), "The mic is blocked here (" + why + "). " + KEYBOARD_TIP)); }
@@ -1093,11 +1121,22 @@ function openRecog(){
   };
   r.onend = () => { if (r !== recog) return;
     heardBase = heardText(); heardNow = "";
+    if (wantOn && IOS){
+      // The iPhone ended the mic on its own. Restarting it from here would be deaf, so: in a call, send what was said;
+      // in a lesson, keep the words and ask for a tap.
+      micLog(r, "ended by phone");
+      if (endAfter && heardBase.split(" ").length >= 3){ wantOn = false; sendOnEnd = true; return finishListening(); }
+      wantOn = false; listening = false; recog = null; clearTimeout(quietT); micBtn && micBtn.classList.remove("on"); audioMode("playback");
+      onInterim && onInterim(heardText(), "The mic stopped. Tap it to keep going.");
+      return;
+    }
     if (wantOn){ setTimeout(()=>{ if (wantOn && r === recog) { try { openRecog(); } catch { finishListening(); } } }, 120); return; }
     finishListening(); };
   try { r.start(); } catch { setTimeout(()=>{ if (wantOn && r === recog) try { r.start(); } catch {
     wantOn = false; onInterim && onInterim(heardText(), "The mic is blocked here. " + KEYBOARD_TIP); finishListening(); } }, 250); }
 }
+// iPhone mic trouble goes to the setup check (?page=check), so we can see what really happened on a phone.
+function micLog(r, how){ try { liveLog(`mic ${how}: ${r._t0 ? Date.now() - r._t0 : "?"}ms, ${heardText().split(" ").filter(Boolean).length} words`); } catch {} }
 // Ask the browser directly so the rep sees its own reason, e.g. "microphone is not allowed in this document".
 async function micBlockedWhy(){
   try { const st = await navigator.mediaDevices.getUserMedia({ audio: true }); st.getTracks().forEach((t) => t.stop());
@@ -1247,11 +1286,14 @@ function showNodeCard(n, u, i){
     const rows = n.questions.map((q, k) => {
       const answered = n.state === "done" || k < at;
       const open = n.state === "done" || k <= at;
+      const next = n.state === "current" && k === at;
       const tag = q.type === "say" ? "Say it" : q.type === "order" ? "Put in order" : "Pick one";
-      return `<button class="qrow ${answered ? "ok" : ""}" data-k="${k}" ${open && n.state !== "locked" ? "" : "disabled"}>
-        <span class="qn">${answered ? icon("check") : k + 1}</span><span class="qt"><small>${tag}</small>${esc(q.prompt)}</span></button>`;
+      return `<button class="qrow ${answered ? "ok" : ""} ${next ? "next" : ""}" data-k="${k}" ${open && n.state !== "locked" ? "" : "disabled"}>
+        <span class="qn">${answered ? icon("check") : k + 1}</span><span class="qt"><small>${next ? "Up next · " : answered && n.state !== "done" ? "Done · " : ""}${tag}</small>${esc(q.prompt)}</span>${next ? `<span class="qgo">${icon("back")}</span>` : ""}</button>`;
     }).join("");
+    const doneN = n.state === "done" ? n.questions.length : at;
     html = `<div class="kicker">Lesson ${i + 1} of ${lessonsIn}</div><h3>${esc(n.title)}</h3>` +
+      (n.state === "locked" ? "" : `<div class="qprog"><span class="qbar"><span style="width:${doneN / n.questions.length * 100}%"></span></span><b>${n.state === "done" ? "All done" : `${doneN} of ${n.questions.length} done`}</b></div>`) +
       (n.state === "locked" ? `<p class="lockmsg">${icon("lock")} Finish “${esc(u.lessons[i - 1] ? u.lessons[i - 1].title : "the lesson before")}” first to unlock this.</p>` : "") +
       `<div class="qlist">${rows}</div>` +
       (n.state === "locked" ? "" : n.state === "done"
@@ -1343,7 +1385,7 @@ function renderUnitPath(box, u, k){
     el.className = `node ${n.state} ${n.kind==="checkpoint"?"checkpoint":""}`;
     el.style.transform = `translateX(${OFFSETS[i % OFFSETS.length]}px)`;
     const ic = n.state==="locked" ? "lock" : n.state==="done" && n.kind!=="checkpoint" ? "check" : n.icon;
-    el.innerHTML = `${n.state==="current" ? `<div class="start">${n.kind==="checkpoint"?"CHECKPOINT":"START"}</div>` : ""}
+    el.innerHTML = `${n.state==="current" ? `<div class="start">${n.kind==="checkpoint"?"CHECKPOINT":(() => { try { const p = JSON.parse(store.get(progressKey(n.id)) || "null"); return p && p.i > 0 && Date.now() - p.at < 864e5 ? `CONTINUE · ${p.i}/${n.questions.length}` : "START"; } catch { return "START"; } })()}</div>` : ""}
       <button class="bubble" aria-label="${esc(n.title)}">${icon(ic)}</button>
       ${n.kind==="lesson" && n.state==="done" ? `<div class="stars">${[1,2,3].map((k)=>`<span style="color:${k<=n.stars?"var(--gold-d)":"var(--line)"}">★</span>`).join("")}</div>` : ""}
       <div class="label">${esc(n.title)}</div>`;
@@ -1565,10 +1607,13 @@ function renderExerciseBody(){
     ta.oninput = () => { L.said = ta.value; setCheck("Check", ta.value.trim().split(/\s+/).length >= 4); };
     $("say-mic").onclick = () => {
       if (listening) { stopListening(true); return; }
+      // Words already in the box (typed, or from an earlier tap) stay; new ones are added after them.
+      const prior = ta.value.trim(), join = (t) => (prior && t ? prior + " " + t : prior || t);
       onMicOn = () => { $("say-hint").textContent = "Listening… tap again when you're done"; };
-      const ok = startListening($("say-mic"), (t)=>{ if (!t){ $("say-hint").textContent = "I didn't hear anything. Tap the mic and try again, or type."; return; }
-          ta.value = t; ta.oninput(); $("say-hint").textContent = "Got it. Edit if you need to, then check."; },
-        (t, warn)=>{ if (warn){ $("say-hint").textContent = warn; ta.focus(); } else { ta.value = t; } }, false);
+      const ok = startListening($("say-mic"), (t)=>{ if (!t && !prior){ $("say-hint").textContent = "I didn't hear anything. Tap the mic and try again, or type."; return; }
+          ta.value = join(t); ta.oninput(); $("say-hint").textContent = "Got it. Edit if you need to, then check."; },
+        (t, warn)=>{ if (t) { ta.value = join(t); ta.oninput(); }
+          if (warn){ $("say-hint").textContent = warn; if (/blocked|Mic problem/.test(warn)) ta.focus(); } }, false);
       if (ok) $("say-hint").textContent = "Starting the mic…";
       else { $("say-hint").textContent = KEYBOARD_TIP; ta.focus(); }
     };
@@ -1737,7 +1782,7 @@ function callListen(keep, tapped){
   phase("you"); $("done-talk").textContent = "I'm done talking"; state.retry = false;
   onMicOn = () => setStatus("Listening. Talk now.", "you");
   const ok = startListening(null, sendRep, (t, warn) => {
-    if (warn && /didn't start/.test(warn)){ phase("ready"); $("done-talk").innerHTML = icon("mic") + "Tap to talk"; return setStatus(warn, "err"); }
+    if (warn && /didn't start|didn't catch|mic stopped/.test(warn)){ phase("ready"); $("done-talk").innerHTML = icon("mic") + "Tap to talk"; return setStatus(warn, "err"); }
     if (warn){ openTyping(true); return setStatus(warn, "err"); }
     $("s-call").classList.toggle("hearing", !!t); if (t) caption(t, true);
   }, 2800, keep);
