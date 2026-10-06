@@ -943,7 +943,7 @@ function show(id){
 // - on the voice page (?relay=1, opened from Apps Script so the mic works): messages to the Apps Script tab, which runs them
 const GAS = typeof google !== "undefined" && !!(google.script && google.script.run);
 const RELAY = !GAS && /[?&]relay=1/.test(location.search);
-const APP_VERSION = "vb0a53c37f3"; // stamped by appsscript/build.mjs
+const APP_VERSION = "ve8f58f02ab"; // stamped by appsscript/build.mjs
 // The version in the address makes phones load a fresh copy instead of GitHub's 10-minute cache.
 const VOICE_PAGE = "https://bryantholt.github.io/myyield-sales-coach/?relay=1&v=" + APP_VERSION;
 const VOICE_ORIGIN = "https://bryantholt.github.io";
@@ -1117,7 +1117,19 @@ async function say(text, role, audio){
 // done(text) fires only when the rep stops: tapping the mic or "Done", or, in a call, a real pause.
 let recog = null, listening = false, micBtn = null, onHeard = null, onInterim = null, onMicOn = null;
 let heardBase = "", heardNow = "", wantOn = false, sendOnEnd = false, endAfter = 0, quietT = null;
-const heardText = () => (heardBase + " " + heardNow).replace(/\s+/g, " ").trim();
+// Safety net: if the words already kept also start the new stretch (any browser restarting or re-sending its
+// list), drop the overlap so nothing is ever written down twice.
+function joinHeard(a, b){
+  const A = a.trim().split(/\s+/).filter(Boolean), B = b.trim().split(/\s+/).filter(Boolean);
+  if (!A.length) return B.join(" "); if (!B.length) return A.join(" ");
+  const norm = (w) => w.toLowerCase().replace(/[^a-z0-9']/g, "");
+  for (let n = Math.min(A.length, B.length); n >= 3; n--){
+    let same = true; for (let i = 0; i < n; i++) if (norm(A[A.length - n + i]) !== norm(B[i])) { same = false; break; }
+    if (same) return A.concat(B.slice(n)).join(" ");
+  }
+  return A.concat(B).join(" ");
+}
+const heardText = () => joinHeard(heardBase, heardNow);
 let micWatch = null;
 const IOS = /iPhone|iPad/.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && /Mac/.test(navigator.platform));
 function startListening(btn, done, interim, silenceMs, keep){
