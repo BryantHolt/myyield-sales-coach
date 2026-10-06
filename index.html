@@ -943,7 +943,7 @@ function show(id){
 // - on the voice page (?relay=1, opened from Apps Script so the mic works): messages to the Apps Script tab, which runs them
 const GAS = typeof google !== "undefined" && !!(google.script && google.script.run);
 const RELAY = !GAS && /[?&]relay=1/.test(location.search);
-const APP_VERSION = "ve8f58f02ab"; // stamped by appsscript/build.mjs
+const APP_VERSION = "v41e60cd188"; // stamped by appsscript/build.mjs
 // The version in the address makes phones load a fresh copy instead of GitHub's 10-minute cache.
 const VOICE_PAGE = "https://bryantholt.github.io/myyield-sales-coach/?relay=1&v=" + APP_VERSION;
 const VOICE_ORIGIN = "https://bryantholt.github.io";
@@ -1930,8 +1930,10 @@ async function farmerTurn(){
     $("done-talk").hidden = false; $("done-talk").textContent = "Try again"; state.retry = true;
   }
 }
+// Phones often hear "Carl" as "girl". In a call with Carl, put his name back.
+const fixNames = (text) => (/^Carl\b/.test(state.farmerName || "") ? String(text).replace(/\bgirls?\b/gi, (w) => (/s$/i.test(w) ? "Carl's" : "Carl")) : text);
 function sendRep(text){
-  text = (text||"").trim();
+  text = fixNames((text||"").trim());
   if (state.ended) return;
   if (!text){ callListen(); return setStatus(ON_PHONE ? "I didn't hear anything. Tap to talk and try again." : "Didn't catch that. Keep going.", "you"); }
   if (state.busy) return;
@@ -2044,6 +2046,7 @@ const liveAvailable = () => liveWanted() && !MIC_BLOCKED && !GAS && !!(window.We
 
 function liveAdd(role, text){
   if (!text) return;
+  if (role === "rep") text = fixNames(text);
   const t = state.transcript, last = t[t.length - 1];
   if (last && last.role === role && !last.closed) last.text = (last.text + text).replace(/\s+/g, " ");
   else t.push({ role, text: text.replace(/^\s+/, "") }); // keep the trailing space; the next chunk follows it
