@@ -88,7 +88,7 @@ main.home{padding-bottom:110px}
 .unit .prog span{display:block;height:100%;background:#fff;border-radius:99px;transition:width .5s}
 
 /* Path */
-.path{position:relative;display:flex;flex-direction:column;align-items:center;gap:18px;padding:22px 0 30px}
+.path{position:relative;display:flex;flex-direction:column;align-items:center;gap:28px;padding:32px 0 40px}
 .node{position:relative;display:flex;flex-direction:column;align-items:center;gap:8px}
 .bubble{width:76px;height:72px;border-radius:50%;display:grid;place-items:center;transition:transform .08s}
 .bubble svg.i{width:34px;height:34px}
@@ -225,33 +225,38 @@ textarea.said:focus{border-color:var(--blue)}
 @keyframes fall{to{transform:translateY(105vh) rotate(540deg);opacity:.9}}
 
 /* Units page and pinned unit header (Duolingo-style) */
-.ucard{display:flex;align-items:center;gap:14px;width:100%;text-align:left;background:#fff;border:1px solid var(--line);border-radius:12px;padding:14px;margin:10px 0}
-.ucard.here{border:2px solid var(--char)}
-.uic{width:52px;height:52px;flex:none;border-radius:50%;display:grid;place-items:center;background:var(--stone);color:var(--blue);border:2px solid var(--blue)}
-.uic svg.i{width:26px;height:26px}
+.ucard{display:flex;align-items:center;gap:16px;width:100%;text-align:left;background:#fff;border:0;border-radius:16px;padding:20px 16px 20px 20px;margin:12px 0;box-shadow:0 1px 2px rgba(20,24,32,.04),0 8px 24px -14px rgba(20,24,32,.14)}
+.ucard.here{box-shadow:inset 0 0 0 2px var(--char),0 8px 24px -14px rgba(20,24,32,.14)}
+.uic{width:44px;height:44px;flex:none;border-radius:50%;display:grid;place-items:center;background:var(--stone);color:var(--blue);border:1.5px solid var(--blue)}
+.uic svg.i{width:22px;height:22px}
 .ucard.here .uic{background:var(--char);color:var(--gold);border-color:var(--gold)}
 .ucard.fin .uic{background:var(--ok-50);color:var(--ok-d);border-color:var(--ok)}
-.ubody{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
-.ueye{font-size:11.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--blue)}
+.ubody{flex:1;min-width:0;display:flex;flex-direction:column;gap:4px}
+.ueye{font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
 .uhere{font-style:normal;background:var(--gold);color:var(--char);border-radius:4px;padding:1px 6px;margin-left:4px;letter-spacing:.04em}
-.utitle{font-weight:800;font-size:16px;color:var(--char);line-height:1.25}
-.ubar{height:6px;border-radius:99px;background:var(--line-2);overflow:hidden;margin-top:4px}
+.utitle{font-weight:800;font-size:18px;color:var(--char);line-height:1.2;letter-spacing:-.01em}
+.udesc{font-size:14px;font-weight:500;color:var(--ink-2);line-height:1.4;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.umeta{display:flex;align-items:center;gap:10px;margin-top:8px}
+.ubar{flex:1;height:4px;border-radius:99px;background:var(--line-2);overflow:hidden}
 .ubar span{display:block;height:100%;background:var(--blue);border-radius:99px}
-.ucount{font-size:12px;color:var(--muted);font-weight:600}
-.ucta{flex:none;font-weight:700;font-size:14px;color:#fff;background:var(--char);border-radius:6px;padding:9px 12px}
-.ucard.fin .ucta{background:transparent;color:var(--char);border:1.5px solid var(--char)}
-.unithead{position:sticky;top:61px;z-index:4;padding-top:10px;background:var(--bg)}
-.unithead .unit{margin:0;padding:12px 14px}
-.unithead .unit h2{font-size:18px;margin:2px 0 8px;line-height:1.25}
+.ucount{flex:none;font-size:12px;color:var(--muted);font-weight:600}
+.ucta{flex:none;display:flex;align-items:center;color:var(--faint)}
+.ucta svg.i{width:20px;height:20px}
+.ucard.here .ucta{color:var(--char)}
+.ucard.fin .ucta{color:var(--ok-d)}
+.unithead{position:sticky;top:61px;z-index:4;padding-top:8px;padding-bottom:4px;background:var(--bg)}
+.unithead .unit{margin:0;padding:18px 20px 20px;border-radius:16px}
+.unithead .unit h2{font-size:22px;margin:4px 0 2px;line-height:1.2}
+.unithead .unit .udesc{color:rgba(255,255,255,.78);margin:0 0 14px;max-width:72%;position:relative;z-index:1}
 .unithead .art svg{width:54px;height:54px}
 .unithead .unit .prog{margin-top:0}
-.uback{display:inline-flex;align-items:center;gap:6px;color:var(--char);font-weight:800;font-size:15px;background:#fff;border:1.5px solid var(--char);border-radius:6px;padding:8px 14px 8px 10px;margin-bottom:10px}
+.uback{display:inline-flex;align-items:center;gap:6px;color:var(--char);font-weight:700;font-size:15px;background:none;border:0;border-radius:8px;padding:8px 6px;margin:0 -6px 6px}
 .uback svg.i{width:20px;height:20px}
-.uback:active{background:var(--char);color:#fff}
+.uback:active{background:var(--line-2)}
 
 /* Unit guide and lesson cards */
 .uheadrow{display:flex;justify-content:space-between;gap:8px}
-.guidecard{display:flex;gap:12px;align-items:center;width:100%;text-align:left;margin:12px 0 0;padding:14px;border-radius:12px;background:var(--gold-50);border:1.5px solid var(--gold)}
+.guidecard{display:flex;gap:16px;align-items:center;width:100%;text-align:left;margin:20px 0 0;padding:18px 20px;border-radius:16px;background:var(--gold-50);border:0}
 .guidecard .gic{width:44px;height:44px;flex:none;border-radius:50%;display:grid;place-items:center;background:var(--char);color:var(--gold)}
 .guidecard b{display:block;color:var(--char);font-size:15px}
 .guidecard small{display:block;color:var(--ink-2);font-size:13px;font-weight:500;margin-top:2px}
@@ -548,6 +553,7 @@ h1,h2,h3,.q,.unit h2,h3.section{color:var(--char);letter-spacing:-.02em}
     <symbol id="i-grid" viewBox="6 6 52 52"><path fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" d="M22 52V16M22 42c-3.8 -0.4 -6.4 -2.6 -6.8 -6.0c3.4 0.2 6.1 2.1 6.8 6.0zM22 34c3.8 -0.4 6.4 -2.6 6.8 -6.0c-3.4 0.2 -6.1 2.1 -6.8 6.0zM22 26c-3.8 -0.4 -6.4 -2.6 -6.8 -6.0c3.4 0.2 6.1 2.1 6.8 6.0zM22 16c-2-2-2-5 0-7c2 2 2 5 0 7zM42 52V16M42 42c-3.8 -0.4 -6.4 -2.6 -6.8 -6.0c3.4 0.2 6.1 2.1 6.8 6.0zM42 34c3.8 -0.4 6.4 -2.6 6.8 -6.0c-3.4 0.2 -6.1 2.1 -6.8 6.0zM42 26c-3.8 -0.4 -6.4 -2.6 -6.8 -6.0c3.4 0.2 6.1 2.1 6.8 6.0zM42 16c-2-2-2-5 0-7c2 2 2 5 0 7zM10 52h44"/></symbol>
     <symbol id="i-mega" viewBox="6 6 52 52"><path fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" d="M22 20m-6 0a6 6 0 1 0 12 0a6 6 0 1 0-12 0M42 20m-6 0a6 6 0 1 0 12 0a6 6 0 1 0-12 0M10 50c0-9 5-16 12-16s12 7 12 16M30 50c0-9 5-16 12-16s12 7 12 16"/></symbol>
     <symbol id="i-back" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" d="m15 18-6-6 6-6"/></symbol>
+    <symbol id="i-next" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" d="m9 18 6-6-6-6"/></symbol>
     <symbol id="i-cc" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2zM8 9h8M8 13h5"/></symbol>
     <symbol id="i-keys" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" d="M4 5h16a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2zM6 9h.01M10 9h.01M14 9h.01M18 9h.01M8 13h.01M12 13h.01M16 13h.01M7 16h10"/></symbol>
     <symbol id="i-micoff" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" d="M2 2l20 20M9 9v3a3 3 0 0 0 5.1 2.1M15 9.3V5a3 3 0 0 0-5.9-.6M17 16.9A7 7 0 0 1 5 12v-2M19 10v2c0 .8-.1 1.5-.4 2.2M12 19v3M8 22h8"/></symbol>
@@ -965,7 +971,7 @@ function show(id){
 // - on the voice page (?relay=1, opened from Apps Script so the mic works): messages to the Apps Script tab, which runs them
 const GAS = typeof google !== "undefined" && !!(google.script && google.script.run);
 const RELAY = !GAS && /[?&]relay=1/.test(location.search);
-const APP_VERSION = "v35ec2f8c10"; // stamped by appsscript/build.mjs
+const APP_VERSION = "v3a8c710f78"; // stamped by appsscript/build.mjs
 // The version in the address makes phones load a fresh copy instead of GitHub's 10-minute cache.
 const VOICE_PAGE = "https://bryantholt.github.io/myyield-sales-coach/?relay=1&v=" + APP_VERSION;
 const VOICE_ORIGIN = "https://bryantholt.github.io";
@@ -1393,7 +1399,7 @@ function renderSideUnits(){
   const box = $("side-units"); if (!box || !state.path) return;
   const units = state.path.units, here = store.get("sc_unit");
   box.innerHTML = `<div class="sh">UNITS</div>` + units.map((u, k) => { const p = unitProgress(u);
-    return `<button class="su ${u.id === here && state.learnView === "unit" ? "here" : ""}" data-k="${k}"><small>UNIT ${k + 1} · ${esc(u.title).toUpperCase()}</small><b>${esc(u.subtitle)}</b><span class="sb"><span style="width:${p.done / p.total * 100}%"></span></span></button>`; }).join("");
+    return `<button class="su ${u.id === here && state.learnView === "unit" ? "here" : ""}" data-k="${k}"><small>${unitKicker(u, k).toUpperCase()}</small><b>${esc(u.short || u.title)}</b><span class="sb"><span style="width:${p.done / p.total * 100}%"></span></span></button>`; }).join("");
   for (const b of box.querySelectorAll(".su")) b.onclick = () => { const k = +b.dataset.k; store.set("sc_unit", units[k].id); setTab("learn"); renderUnit(k); window.scrollTo(0, 0); };
 }
 function renderRailBoard(){
@@ -1423,6 +1429,8 @@ function renderPath(){
   const k = units.findIndex((u) => u.id === saved);
   if (state.learnView === "units" || k < 0) renderUnitList(); else renderUnit(k);
 }
+// "Unit 4 · Play 1" for plays; just "Unit 1" when the short name already says it.
+function unitKicker(u, k){ return `Unit ${k + 1}` + (u.short && u.short !== u.title ? ` · ${esc(u.title)}` : ""); }
 function renderUnitList(){
   state.learnView = "units"; $("today").hidden = false; renderSideUnits();
   const units = state.path.units, here = store.get("sc_unit");
@@ -1433,11 +1441,12 @@ function renderUnitList(){
       const cta = p.finished ? "Review" : p.started || isHere ? "Continue" : "Start";
       return `<button class="ucard ${p.finished ? "fin" : ""} ${isHere ? "here" : ""}" data-k="${k}">
         <span class="uic">${icon(p.finished ? "check" : u.icon || "book")}</span>
-        <span class="ubody"><span class="ueye">Unit ${k + 1} · ${esc(u.title)}${isHere ? ' <i class="uhere">You\'re here</i>' : ""}</span>
-          <span class="utitle">${esc(u.subtitle)}</span>
-          <span class="ubar"><span style="width:${(p.done / p.total) * 100}%"></span></span>
-          <span class="ucount">${p.done} of ${p.total} done</span></span>
-        <span class="ucta">${cta}</span></button>`;
+        <span class="ubody"><span class="ueye">${unitKicker(u, k)}${isHere ? ' <i class="uhere">You\'re here</i>' : ""}</span>
+          <span class="utitle">${esc(u.short || u.title)}</span>
+          <span class="udesc">${esc(u.subtitle)}</span>
+          <span class="umeta"><span class="ubar"><span style="width:${(p.done / p.total) * 100}%"></span></span>
+          <span class="ucount">${p.done}/${p.total}</span></span></span>
+        <span class="ucta" aria-label="${cta}">${icon("next")}</span></button>`;
     }).join("");
   for (const b of box.querySelectorAll(".ucard")) b.onclick = () => { store.set("sc_unit", units[+b.dataset.k].id); state.learnView = "unit"; renderUnit(+b.dataset.k); window.scrollTo(0, 0); };
 }
@@ -1448,7 +1457,7 @@ function renderUnit(k){
   const heard = store.get("sc_guide_" + u.id);
   box.innerHTML = `<div class="unithead"><div class="uheadrow"><button class="uback" id="all-units">${icon("back")}<span>All units</span></button>
       <button class="uback" id="unit-guide">${icon("book")}<span>Unit guide</span></button></div><div class="unit">
-      <div class="eyebrow">Unit ${k + 1} · ${esc(u.title)}</div><h2>${esc(u.subtitle)}</h2>
+      <div class="eyebrow">${unitKicker(u, k)}</div><h2>${esc(u.short || u.title)}</h2><div class="udesc">${esc(u.subtitle)}</div>
       <div class="prog"><span style="width:${(p.done / p.total) * 100}%"></span></div><div class="art">${Art.field}</div></div></div>
     ${heard ? "" : `<button class="guidecard" id="guide-card"><span class="gic">${icon("mic")}</span><span><b>New to this play? Start here.</b><small>Listen to the ${guideMinutes(u)}-minute unit guide: what it is, who it's for, and how to pitch it.</small></span></button>`}
     <div class="path"></div>`;
