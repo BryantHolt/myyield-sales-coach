@@ -943,7 +943,7 @@ function show(id){
 // - on the voice page (?relay=1, opened from Apps Script so the mic works): messages to the Apps Script tab, which runs them
 const GAS = typeof google !== "undefined" && !!(google.script && google.script.run);
 const RELAY = !GAS && /[?&]relay=1/.test(location.search);
-const APP_VERSION = "v9479b721cf"; // stamped by appsscript/build.mjs
+const APP_VERSION = "vb0a53c37f3"; // stamped by appsscript/build.mjs
 // The version in the address makes phones load a fresh copy instead of GitHub's 10-minute cache.
 const VOICE_PAGE = "https://bryantholt.github.io/myyield-sales-coach/?relay=1&v=" + APP_VERSION;
 const VOICE_ORIGIN = "https://bryantholt.github.io";
@@ -1160,7 +1160,9 @@ function openRecog(){
     // iPhones (and some Chrome builds) quietly start a fresh results list after a pause in the middle of one mic session.
     // Without this, everything said before the pause vanishes ("it recorded some of it, but not all").
     const first = e.results.length ? e.results[0][0].transcript.trim().toLowerCase() : "";
-    const reset = r._len && (e.results.length < r._len || (r._final0 && first && !first.startsWith(r._first.slice(0, Math.min(12, r._first.length)))));
+    // Only on iPhones, and only when the first finished phrase itself changes. (Chrome on computers briefly shrinks
+    // the list while it finalizes a phrase; treating that as a fresh list wrote every answer down twice.)
+    const reset = IOS && r._len && r._final0 && first && !first.startsWith(r._first.slice(0, Math.min(12, r._first.length)));
     if (reset){ heardBase = heardText(); heardNow = ""; }
     r._len = e.results.length; r._first = first; r._final0 = !!(e.results.length && e.results[0].isFinal);
     heardNow = t; onInterim && onInterim(heardText());
