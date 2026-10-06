@@ -765,64 +765,64 @@ h1,h2,h3,.q,.unit h2,h3.section{color:var(--char);letter-spacing:-.02em}
 (function () {
   const BLUE = "#1A5690", BLUE_D = "#144677", BLUE_L = "#C9DAEC", BLUE_XL = "#E6EEF7", INK = "#1B1F27", WIN = "#F9CD37";
 
-  // Coach mascot "Kernel": a chunky, friendly ear of corn drawn the Duolingo way: round shapes, no outlines,
-  // big eyes, flat shading, husk leaves for wings. Moods: happy, think, oops, cheer.
+  // Coach mascot: an ear of corn, drawn in a Duolingo-like style (flat color, no outlines, chunky rounded shapes,
+  // big friendly eyes). Kernel rows on the cob, husk leaves peeling open at the bottom, silk on top.
+  // Moods: happy, think, oops, cheer.
   let mascotN = 0;
   function mascot(mood = "happy", size = 72) {
     const id = "kn" + (++mascotN);
-    const GOLD = "#F9CD37", GOLD_D = "#E5AE14", GOLD_L = "#FFE27A", BELLY = "#FFF1B8";
-    const LEAF = "#58B03C", LEAF_D = "#3F8A2A", LEAF_L = "#7CCB57", SILK = "#F4DE9A", SILK_D = "#E2C36B";
-    const EYE_RING = "#EDB91C", CHEEK = "#FF9F8A", MOUTH = "#7A2E1E", TONGUE = "#FF7B7B";
-    const body = "M50 10 C70 10 81 30 81 54 C81 79 68 93 50 93 C32 93 19 79 19 54 C19 30 30 10 50 10Z";
-    // Pupils look around by mood.
-    const look = { happy: [0, 1], think: [2.6, -2.4], oops: [-0.5, 2.2], cheer: [0, 0] }[mood] || [0, 1];
-    const eye = (cx) => `<circle cx="${cx}" cy="42" r="12.5" fill="${EYE_RING}"/><circle cx="${cx}" cy="42" r="10.5" fill="#fff"/>
-      <circle cx="${cx + look[0]}" cy="${42 + look[1]}" r="6.6" fill="${INK}"/><circle cx="${cx + look[0] + 2.2}" cy="${42 + look[1] - 2.6}" r="2.4" fill="#fff"/>`;
+    const COB = "#F3BE24", KERN = "#FFD445", KERN_L = "#FFE27E", SHADE = "#D99A0B";
+    const LEAF = "#5DB43F", LEAF_D = "#3E8D2B", VEIN = "#8AD46A", SILK = "#F3D58A", SILK_D = "#D9AE55";
+    const CHEEK = "#FF8F7A", MOUTH = "#7A2E1E", TONGUE = "#FF7B7B";
+    const cob = "M50 7 C64 7 72 24 72 47 C72 72 63 90 50 90 C37 90 28 72 28 47 C28 24 36 7 50 7Z";
+    // Kernels: staggered rows of rounded kernels over a darker cob.
+    let kernels = "";
+    for (let r = 0; r < 9; r++) {
+      const y = 8 + r * 9.2, off = r % 2 ? 4.4 : 0;
+      for (let c = -1; c < 6; c++) {
+        const x = 26 + c * 8.8 + off;
+        kernels += `<rect x="${x}" y="${y}" width="8" height="8.4" rx="3.8" fill="${c <= 0 ? KERN_L : KERN}"/>`;
+      }
+    }
+    const look = { happy: [0, 1], think: [2, -2.2], oops: [-0.4, 2], cheer: [0, 0] }[mood] || [0, 1];
+    const eye = (cx) => `<ellipse cx="${cx}" cy="41" rx="8.4" ry="10" fill="#fff"/>
+      <circle cx="${cx + look[0]}" cy="${42.5 + look[1]}" r="5.4" fill="${INK}"/><circle cx="${cx + look[0] + 1.9}" cy="${42.5 + look[1] - 2.2}" r="2" fill="#fff"/>`;
     const eyes = mood === "cheer"
-      ? `<circle cx="39" cy="42" r="12.5" fill="${EYE_RING}"/><circle cx="61" cy="42" r="12.5" fill="${EYE_RING}"/>
-         <path d="M31.5 45 q7.5 -10 15 0" stroke="${INK}" stroke-width="4" fill="none" stroke-linecap="round"/><path d="M53.5 45 q7.5 -10 15 0" stroke="${INK}" stroke-width="4" fill="none" stroke-linecap="round"/>`
-      : eye(39) + eye(61);
+      ? `<path d="M35 45 q6 -9 12 0" stroke="${INK}" stroke-width="3.6" fill="none" stroke-linecap="round"/><path d="M53 45 q6 -9 12 0" stroke="${INK}" stroke-width="3.6" fill="none" stroke-linecap="round"/>`
+      : eye(41) + eye(59);
     const brows = {
-      oops: `<path d="M30 28 q5 -5 12 -2" stroke="${GOLD_D}" stroke-width="3.4" fill="none" stroke-linecap="round"/><path d="M70 28 q-5 -5 -12 -2" stroke="${GOLD_D}" stroke-width="3.4" fill="none" stroke-linecap="round"/>`,
-      think: `<path d="M53 26 q8 -5 15 -1" stroke="${GOLD_D}" stroke-width="3.4" fill="none" stroke-linecap="round"/>`,
+      oops: `<path d="M34 30 q4 -4 10 -2" stroke="${INK}" stroke-width="2.6" fill="none" stroke-linecap="round"/><path d="M66 30 q-4 -4 -10 -2" stroke="${INK}" stroke-width="2.6" fill="none" stroke-linecap="round"/>`,
+      think: `<path d="M54 29 q6 -4 11 -1" stroke="${INK}" stroke-width="2.6" fill="none" stroke-linecap="round"/>`,
     }[mood] || "";
     const mouth = {
-      happy: `<path d="M41.5 58.5 q8.5 2 17 0 q-1.5 9.5 -8.5 9.5 q-7 0 -8.5 -9.5z" fill="${MOUTH}"/><path d="M45.5 65 q4.5 -3.5 9 0 q-4.5 3.5 -9 0z" fill="${TONGUE}"/>`,
-      cheer: `<path d="M40 57 q10 2 20 0 q-1 15 -10 15 q-9 0 -10 -15z" fill="${MOUTH}"/><path d="M44.5 67 q5.5 -5 11 0 q-5.5 5 -11 0z" fill="${TONGUE}"/>`,
-      oops: `<path d="M44 64 q3 -3 6 0 q3 3 6 0" stroke="${MOUTH}" stroke-width="3" fill="none" stroke-linecap="round"/>`,
-      think: `<path d="M45 62 q6 -1 11 -3" stroke="${MOUTH}" stroke-width="3.2" fill="none" stroke-linecap="round"/>`,
+      happy: `<path d="M42.5 56 q7.5 2 15 0 q-1.5 8.5 -7.5 8.5 q-6 0 -7.5 -8.5z" fill="${MOUTH}"/><path d="M46 62 q4 -3 8 0 q-4 3 -8 0z" fill="${TONGUE}"/>`,
+      cheer: `<path d="M40.5 54 q9.5 2 19 0 q-1 13 -9.5 13 q-8.5 0 -9.5 -13z" fill="${MOUTH}"/><path d="M45 63 q5 -4.5 10 0 q-5 4.5 -10 0z" fill="${TONGUE}"/>`,
+      oops: `<path d="M44.5 60 q2.75 -3 5.5 0 q2.75 3 5.5 0" stroke="${MOUTH}" stroke-width="2.8" fill="none" stroke-linecap="round"/>`,
+      think: `<path d="M45 59 q5.5 -0.5 10 -2.5" stroke="${MOUTH}" stroke-width="3" fill="none" stroke-linecap="round"/>`,
     }[mood];
-    // Husk leaves: hug the body from the bottom; raised up when cheering.
-    const leafL = mood === "cheer"
-      ? `<path d="M30 80 C14 70 8 48 9 26 C18 40 27 52 36 66Z" fill="${LEAF}"/><path d="M30 80 C20 72 14 58 12 44 C20 56 27 64 34 72Z" fill="${LEAF_D}"/>`
-      : `<path d="M34 94 C14 90 9 70 13 50 C20 64 30 76 44 88Z" fill="${LEAF}"/><path d="M34 94 C22 91 16 82 14 70 C22 79 32 86 42 90Z" fill="${LEAF_D}"/>`;
-    const leafR = mood === "cheer"
-      ? `<path d="M70 80 C86 70 92 48 91 26 C82 40 73 52 64 66Z" fill="${LEAF}"/><path d="M70 80 C80 72 86 58 88 44 C80 56 73 64 66 72Z" fill="${LEAF_D}"/>`
-      : `<path d="M66 94 C86 90 91 70 87 50 C80 64 70 76 56 88Z" fill="${LEAF}"/><path d="M66 94 C78 91 84 82 86 70 C78 79 68 86 58 90Z" fill="${LEAF_D}"/>`;
-    // Soft kernel bumps on the sides of the cob (low contrast so the face stays the focus).
-    let kernels = "";
-    for (let r = 0; r < 8; r++) for (const x of [24, 31, 69, 76]) {
-      const y = 22 + r * 8.6 + (x === 31 || x === 69 ? 4.3 : 0);
-      kernels += `<rect x="${x - 3}" y="${y}" width="6" height="7" rx="3" fill="${GOLD_L}" opacity=".4"/>`;
-    }
-    const sparkles = mood === "cheer"
-      ? `<g fill="${WIN}"><path d="M10 12 l2 5 5 2 -5 2 -2 5 -2 -5 -5 -2 5 -2z"/><path d="M90 8 l1.6 4 4 1.6 -4 1.6 -1.6 4 -1.6 -4 -4 -1.6 4 -1.6z"/><path d="M93 34 l1.2 3 3 1.2 -3 1.2 -1.2 3 -1.2 -3 -3 -1.2 3 -1.2z"/></g>` : "";
+    // Husk: a back leaf, then two front leaves peeling open from the base. Cheering flings them wider.
+    const up = mood === "cheer";
+    const leaf = (side) => {
+      const m = side < 0 ? (x) => x : (x) => 100 - x;
+      const tipX = up ? 6 : 14, tipY = up ? 30 : 46;
+      return `<path d="M${m(50)} 96 C${m(36)} 96 ${m(tipX + 6)} ${tipY + 26} ${m(tipX)} ${tipY} C${m(tipX + 16)} ${tipY + 12} ${m(38)} ${tipY + 30} ${m(52)} 92Z" fill="${LEAF}"/>
+        <path d="M${m(47)} 93 C${m(36)} 86 ${m(tipX + 10)} ${tipY + 22} ${m(tipX + 2)} ${tipY + 3}" stroke="${VEIN}" stroke-width="1.6" fill="none" stroke-linecap="round" opacity=".8"/>`;
+    };
+    const sparkles = up
+      ? `<g fill="${WIN}"><path d="M14 10 l2 5 5 2 -5 2 -2 5 -2 -5 -5 -2 5 -2z"/><path d="M88 6 l1.6 4 4 1.6 -4 1.6 -1.6 4 -1.6 -4 -4 -1.6 4 -1.6z"/><path d="M92 28 l1.2 3 3 1.2 -3 1.2 -1.2 3 -1.2 -3 -3 -1.2 3 -1.2z"/></g>` : "";
     return `<svg viewBox="0 0 100 100" width="${size}" height="${size}" aria-hidden="true">
-      <defs><clipPath id="${id}"><path d="${body}"/></clipPath></defs>
+      <defs><clipPath id="${id}"><path d="${cob}"/></clipPath></defs>
       ${sparkles}
-      <ellipse cx="50" cy="96" rx="24" ry="3.5" fill="${INK}" opacity=".10"/>
-      <path d="M50 12 C44 2 36 1 33 3 C39 5 44 9 47 14Z" fill="${SILK_D}"/><path d="M50 12 C52 1 60 -1 64 1 C58 4 54 9 53 14Z" fill="${SILK}"/><path d="M49 13 C47 4 50 0 52 -1 C53 5 53 9 52 13Z" fill="${SILK}"/>
-      <path d="${body}" fill="${GOLD}"/>
-      <g clip-path="url(#${id})">
-        ${kernels}
-        <ellipse cx="74" cy="66" rx="22" ry="40" fill="${GOLD_D}" opacity=".35"/>
-        <ellipse cx="50" cy="78" rx="19" ry="15" fill="${BELLY}" opacity=".7"/>
-        <ellipse cx="38" cy="22" rx="9" ry="5" fill="#fff" opacity=".35" transform="rotate(-25 38 22)"/>
+      <ellipse cx="50" cy="96.5" rx="22" ry="3" fill="${INK}" opacity=".10"/>
+      <path d="M50 96 C40 94 34 82 36 66 C42 74 46 84 50 90 C54 84 58 74 64 66 C66 82 60 94 50 96Z" fill="${LEAF_D}"/>
+      <path d="M49 9 C44 1 37 0 33 2 C39 3 44 6 46 11Z" fill="${SILK_D}"/><path d="M51 9 C55 0 62 -1 66 1 C60 3 56 7 54 11Z" fill="${SILK}"/><path d="M49.5 9 C48 2 50 -1 52 -2 C52.5 3 52.5 6 52 10Z" fill="${SILK}"/>
+      <path d="${cob}" fill="${COB}"/>
+      <g clip-path="url(#${id})">${kernels}
+        <path d="M60 4 C76 20 76 70 58 94 L80 94 L80 4Z" fill="${SHADE}" opacity=".28"/>
       </g>
-      ${leafL}${leafR}
-      <ellipse cx="41" cy="94" rx="6" ry="3" fill="${LEAF_D}"/><ellipse cx="59" cy="94" rx="6" ry="3" fill="${LEAF_D}"/>
+      ${leaf(-1)}${leaf(1)}
       ${eyes}${brows}
-      <ellipse cx="29" cy="56" rx="5" ry="3" fill="${CHEEK}" opacity=".55"/><ellipse cx="71" cy="56" rx="5" ry="3" fill="${CHEEK}" opacity=".55"/>
+      <ellipse cx="33.5" cy="53" rx="4.2" ry="2.6" fill="${CHEEK}" opacity=".6"/><ellipse cx="66.5" cy="53" rx="4.2" ry="2.6" fill="${CHEEK}" opacity=".6"/>
       ${mouth}
     </svg>`;
   }
@@ -906,7 +906,7 @@ function show(id){
 // - on the voice page (?relay=1, opened from Apps Script so the mic works): messages to the Apps Script tab, which runs them
 const GAS = typeof google !== "undefined" && !!(google.script && google.script.run);
 const RELAY = !GAS && /[?&]relay=1/.test(location.search);
-const APP_VERSION = "v5c44b1addd"; // stamped by appsscript/build.mjs
+const APP_VERSION = "v6a187b0b78"; // stamped by appsscript/build.mjs
 // The version in the address makes phones load a fresh copy instead of GitHub's 10-minute cache.
 const VOICE_PAGE = "https://bryantholt.github.io/myyield-sales-coach/?relay=1&v=" + APP_VERSION;
 const VOICE_ORIGIN = "https://bryantholt.github.io";
