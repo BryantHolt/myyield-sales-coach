@@ -431,6 +431,35 @@ h1,h2,h3,.q,.unit h2,h3.section{color:var(--char);letter-spacing:-.02em}
 .flagbtn svg{width:14px;height:14px}
 .flagform textarea{width:100%;min-height:70px;margin:6px 0;padding:8px;border-radius:6px;border:1.5px solid #CFCAC0;font:inherit;font-size:14px;box-sizing:border-box}
 .lockcard{text-align:center;padding:22px 16px}
+/* Desktop: like Duolingo, the tabs become a left sidebar and streak, quests and the leaderboard sit in a right column. */
+.rail{display:none} .sideunits{display:none}
+.sideunits .sh{font-size:11.5px;font-weight:800;letter-spacing:.12em;color:var(--blue);margin:18px 8px 6px}
+.su{display:flex;flex-direction:column;gap:4px;width:100%;text-align:left;background:none;border:0;border-radius:10px;padding:8px 10px;cursor:pointer;color:var(--char)}
+.su:hover{background:var(--bg)} .su.here{background:var(--gold-50)}
+.su small{font-size:11px;font-weight:700;color:var(--ink-2);letter-spacing:.04em} .su b{font-size:13.5px;line-height:1.3}
+.su .sb{height:5px;border-radius:3px;background:var(--line-2);overflow:hidden} .su .sb span{display:block;height:100%;background:var(--gold)}
+.railboard .rbhead{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
+.railboard .rbhead b{color:var(--char)} .railboard .rbhead button{background:none;border:0;color:var(--blue);font-weight:800;font-size:13px;cursor:pointer;letter-spacing:.04em}
+.rbrow{display:flex;align-items:center;gap:10px;padding:7px 4px;border-radius:8px;font-size:14px;font-weight:700;color:var(--char)}
+.rbrow.you{background:var(--blue-50)} .rbrow .rn{width:18px;text-align:center;color:var(--ink-2)} .rbrow .rv{margin-left:auto;color:var(--ink-2);font-weight:600}
+.rbrow .av{width:28px;height:28px;font-size:11px}
+@media (min-width:1080px){
+  #s-home .topbar .wrap{max-width:none;padding:0 28px}
+  #s-home .tabs{top:61px;bottom:0;right:auto;width:228px;border-top:0;border-right:1px solid var(--line);padding:18px 12px;background:#fff}
+  #s-home .tabs .wrap{flex-direction:column;justify-content:flex-start;gap:6px;max-width:none;padding:0}
+  #s-home .tab{flex:none;flex-direction:row;gap:10px;padding:6px 8px;font-size:15px;color:var(--ink-2);border-radius:10px;letter-spacing:0;cursor:pointer}
+  #s-home .tab .tabicon{padding:4px 6px}
+  #s-home .tab svg.i{width:24px;height:24px}
+  #s-home .tab:hover{background:var(--bg)}
+  #s-home .tab[aria-current="page"]{background:var(--blue-50);color:var(--char)}
+  #s-home .tab[aria-current="page"] .tabicon{background:transparent}
+  #s-home .tabs{overflow-y:auto}
+  .sideunits{display:block;border-top:1px solid var(--line);margin-top:10px}
+  main.home{margin-left:228px;padding:4px 28px 48px;display:grid;grid-template-columns:minmax(0,600px) 340px;column-gap:36px;justify-content:center;align-items:start}
+  main.home > *:not(.rail){grid-column:1;min-width:0}
+  .rail{display:block;grid-column:2;grid-row:1 / span 40;position:sticky;top:76px;padding-top:14px}
+  .rail .card{margin:0 0 16px}
+}
 #busy{position:fixed;inset:0 0 auto 0;z-index:200;pointer-events:none}
 .busybar{height:4px;background:linear-gradient(90deg,transparent,var(--gold),transparent);background-size:50% 100%;background-repeat:no-repeat;animation:busy 1s linear infinite}
 @keyframes busy{0%{background-position:-50% 0}100%{background-position:150% 0}}
@@ -556,6 +585,7 @@ h1,h2,h3,.q,.unit h2,h3.section{color:var(--char);letter-spacing:-.02em}
   </div></header>
 
   <main class="home">
+    <aside class="rail" id="rail" aria-label="Your progress"><div id="rail-today"></div><div class="card railboard" id="rail-board"></div></aside>
     <div class="wrap" id="home-err" hidden><div class="card" style="border-color:var(--err)">
       <p style="margin:0 0 10px;font-weight:700">Couldn't load your Sales Coach.</p>
       <p class="muted" id="home-err-msg" style="margin:0 0 12px"></p>
@@ -620,6 +650,7 @@ h1,h2,h3,.q,.unit h2,h3.section{color:var(--char);letter-spacing:-.02em}
     <button class="tab" data-tab="practice"><span class="tabicon"><svg class="i"><use href="#i-phone"/></svg></span>Practice</button>
     <button class="tab" data-tab="board"><span class="tabicon"><svg class="i"><use href="#i-trophy"/></svg></span>Leaders</button>
     <button class="tab" data-tab="me"><span class="tabicon"><svg class="i"><use href="#i-user"/></svg></span>Profile</button>
+    <div class="sideunits" id="side-units"></div>
   </div></nav>
 </section>
 
@@ -912,7 +943,7 @@ function show(id){
 // - on the voice page (?relay=1, opened from Apps Script so the mic works): messages to the Apps Script tab, which runs them
 const GAS = typeof google !== "undefined" && !!(google.script && google.script.run);
 const RELAY = !GAS && /[?&]relay=1/.test(location.search);
-const APP_VERSION = "v749879b6f0"; // stamped by appsscript/build.mjs
+const APP_VERSION = "v9479b721cf"; // stamped by appsscript/build.mjs
 // The version in the address makes phones load a fresh copy instead of GitHub's 10-minute cache.
 const VOICE_PAGE = "https://bryantholt.github.io/myyield-sales-coach/?relay=1&v=" + APP_VERSION;
 const VOICE_ORIGIN = "https://bryantholt.github.io";
@@ -1282,7 +1313,7 @@ async function loadHome(){
   try {
     const [me, path, opts] = await Promise.all([api("/api/me"), api("/api/path"), api("/api/start")]);
     state.me = me.stats; state.board = me.leaderboard; state.path = path;
-    renderChips(); renderToday(); renderPath(); renderPractice(opts); renderBoard(); renderMe();
+    renderChips(); renderToday(); renderPath(); renderPractice(opts); renderBoard(); renderRailBoard(); renderSideUnits(); renderMe(); placeToday();
     offerPendingCall();
   } catch (e) {
     if (/Tell us your name/.test(e.message)) return; // the sign-in screen is already showing
@@ -1311,6 +1342,36 @@ function renderToday(){
       ${quest(q.lessons > 0, "lesson")}${quest(q.calls > 0, "call")}</div></div>`;
 }
 const BOARD_UNLOCK = 3;
+const DESK = () => matchMedia("(min-width:1080px)").matches;
+// On desktop the Today card lives in the right column (on every tab); on phones it sits at the top of Learn.
+function placeToday(){
+  const t = $("today"), desk = DESK();
+  if (desk && t.parentNode !== $("rail-today")) $("rail-today").appendChild(t);
+  if (!desk && t.parentNode !== $("tab-learn")) $("tab-learn").insertBefore(t, $("learn"));
+  t.hidden = !desk && state.learnView === "unit";
+}
+matchMedia("(min-width:1080px)").addEventListener("change", placeToday);
+// Right column: this week's top five (or how far until the board unlocks).
+// Desktop sidebar: every unit with its progress, one click to jump in.
+function renderSideUnits(){
+  const box = $("side-units"); if (!box || !state.path) return;
+  const units = state.path.units, here = store.get("sc_unit");
+  box.innerHTML = `<div class="sh">UNITS</div>` + units.map((u, k) => { const p = unitProgress(u);
+    return `<button class="su ${u.id === here && state.learnView === "unit" ? "here" : ""}" data-k="${k}"><small>UNIT ${k + 1} · ${esc(u.title).toUpperCase()}</small><b>${esc(u.subtitle)}</b><span class="sb"><span style="width:${p.done / p.total * 100}%"></span></span></button>`; }).join("");
+  for (const b of box.querySelectorAll(".su")) b.onclick = () => { const k = +b.dataset.k; store.set("sc_unit", units[k].id); setTab("learn"); renderUnit(k); window.scrollTo(0, 0); };
+}
+function renderRailBoard(){
+  const box = $("rail-board"); if (!box) return;
+  const me = state.me, doneN = me ? (me.lessonsDone || 0) + (me.calls || 0) : 0;
+  const head = `<div class="rbhead"><b>This week</b><button type="button" id="rb-all">VIEW ALL</button></div>`;
+  if (doneN < BOARD_UNLOCK){ const left = BOARD_UNLOCK - doneN; box.innerHTML = head + `<p class="sub" style="margin:4px 0 0">${icon("lock")} Finish ${left} more lesson${left === 1 ? "" : "s"} or call${left === 1 ? "" : "s"} to join the leaderboard.</p>`; }
+  else {
+    const rows = ((state.board && state.board.week) || []).slice(0, 5);
+    box.innerHTML = head + (rows.length ? rows.map((r) => `<div class="rbrow ${r.you ? "you" : ""}"><span class="rn">${r.rank}</span><div class="av" style="background:${avColor(r.rep)}">${esc(initials(r.rep))}</div><span>${esc(r.rep)}${r.you ? " (you)" : ""}</span><span class="rv">${r.weekPoints} pts</span></div>`).join("")
+      : `<p class="sub" style="margin:4px 0 0">No one has practiced this week yet. Your next lesson takes the top spot.</p>`);
+  }
+  $("rb-all").onclick = () => setTab("board");
+}
 
 const OFFSETS = [0, 56, 84, 56, 0, -56, -84, -56];
 // Learn works like Duolingo: a Units page (every unit as a card, any can be started) and one unit's path at a time,
@@ -1327,7 +1388,7 @@ function renderPath(){
   if (state.learnView === "units" || k < 0) renderUnitList(); else renderUnit(k);
 }
 function renderUnitList(){
-  state.learnView = "units"; $("today").hidden = false;
+  state.learnView = "units"; $("today").hidden = false; renderSideUnits();
   const units = state.path.units, here = store.get("sc_unit");
   const box = $("learn");
   box.innerHTML = `<h3 class="section" style="margin-top:18px">Units</h3><p class="sub">Start any unit. Inside a unit, each lesson unlocks the next.</p>` +
@@ -1345,7 +1406,7 @@ function renderUnitList(){
   for (const b of box.querySelectorAll(".ucard")) b.onclick = () => { store.set("sc_unit", units[+b.dataset.k].id); state.learnView = "unit"; renderUnit(+b.dataset.k); window.scrollTo(0, 0); };
 }
 function renderUnit(k){
-  state.learnView = "unit"; $("today").hidden = true;
+  state.learnView = "unit"; $("today").hidden = !DESK(); renderSideUnits();
   const u = state.path.units[k], p = unitProgress(u);
   const box = $("learn");
   const heard = store.get("sc_guide_" + u.id);
