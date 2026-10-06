@@ -943,7 +943,7 @@ function show(id){
 // - on the voice page (?relay=1, opened from Apps Script so the mic works): messages to the Apps Script tab, which runs them
 const GAS = typeof google !== "undefined" && !!(google.script && google.script.run);
 const RELAY = !GAS && /[?&]relay=1/.test(location.search);
-const APP_VERSION = "v41e60cd188"; // stamped by appsscript/build.mjs
+const APP_VERSION = "v26b3b240ef"; // stamped by appsscript/build.mjs
 // The version in the address makes phones load a fresh copy instead of GitHub's 10-minute cache.
 const VOICE_PAGE = "https://bryantholt.github.io/myyield-sales-coach/?relay=1&v=" + APP_VERSION;
 const VOICE_ORIGIN = "https://bryantholt.github.io";
@@ -1037,7 +1037,7 @@ async function apiRaw(path, data){
 }
 function signOut(){ store.del("sc_token"); store.del("sc_name"); state.token=null; state.name=null; show("s-signin"); }
 
-function toast(msg){ const t=document.createElement("div"); t.className="toast"; t.textContent=msg; document.body.appendChild(t); setTimeout(()=>t.remove(), 3500); }
+function toast(msg, ms){ const t=document.createElement("div"); t.className="toast"; t.textContent=msg; document.body.appendChild(t); setTimeout(()=>t.remove(), ms || 3500); }
 function confetti(){
   const box = $("confetti"); box.innerHTML = "";
   const colors = ["#F9CD37","#1A5690","#5B9BD5","#F9CD37","#1A5690"];
@@ -2026,7 +2026,10 @@ async function startCall(){
   show("s-call"); caption(""); setStatus("Calling…");
   if (liveAvailable()){
     try { await startLive(); return; }
-    catch (e) { stopLive(); if (state.ended) return; liveLog("start failed: " + e.message); toast(`Live voice didn't connect (${e.message}), so this call uses standard voice.`); }
+    catch (e) { stopLive(); if (state.ended) return; liveLog("start failed: " + e.message);
+      // A closed or blocked mic prompt is the common case; say what to do, not what broke.
+      if (/^mic:.*(dismiss|denied|not ?allowed|permission)/i.test(e.message)) toast("The Sales Coach needs your microphone. When your browser asks, click Allow. (If you blocked it, click the lock icon by the address, then Microphone, then Allow.)", 10000);
+      else toast(`Live voice didn't connect (${e.message}), so this call uses standard voice.`); }
   }
   say(""); farmerTurn();
 }
