@@ -572,7 +572,7 @@ h1,h2,h3,.q,.unit h2,h3.section{color:var(--char);letter-spacing:-.02em}
   </div>
   <div class="wrap form">
     <div class="field"><label for="name">Your name</label><input id="name" autocomplete="name" placeholder="First and last name"></div>
-    <div class="field"><label for="code">Pilot code</label><input id="code" type="password" autocomplete="current-password"></div>
+    <div class="field"><label for="code">Access code</label><input id="code" type="password" autocomplete="current-password"></div>
     <div class="err" id="signin-err"></div>
     <button class="btn btn-primary" id="signin-btn">Get started</button>
   </div>
@@ -631,7 +631,7 @@ h1,h2,h3,.q,.unit h2,h3.section{color:var(--char);letter-spacing:-.02em}
         <div class="pills" id="farmers"></div>
         <div style="font-weight:800;margin-top:16px">How tough?</div>
         <div class="pills" id="tough"></div>
-        <label class="toggle" style="margin-top:16px"><span><b style="color:var(--char)">Live voice</b> (new): talk naturally and interrupt him, like a real call</span><input type="checkbox" id="live-pref"></label>
+        <label class="toggle" style="margin-top:16px"><span><b style="color:var(--char)">Live voice</b>: talk naturally and interrupt him, like a real call</span><input type="checkbox" id="live-pref"></label>
         <div class="err" id="setup-err" style="margin-top:12px"></div>
         <button class="btn btn-primary" id="setup-btn">Get my briefing</button>
       </div>
@@ -758,7 +758,7 @@ h1,h2,h3,.q,.unit h2,h3.section{color:var(--char);letter-spacing:-.02em}
   <div class="wrap" style="padding-bottom:140px">
     <div class="kicker" id="guide-title"></div>
     <h2 style="margin:4px 0 6px;font-size:24px" id="guide-sub"></h2>
-    <p class="sub">Listen, read, or both. Then start the first lesson.</p>
+    <p class="sub">Listen, read, or both. Then jump into the lessons.</p>
     <div id="guide-body"></div>
   </div>
   <div class="dock"><div class="wrap"><button class="btn btn-primary" id="guide-play"></button></div></div>
@@ -971,7 +971,7 @@ function show(id){
 // - on the voice page (?relay=1, opened from Apps Script so the mic works): messages to the Apps Script tab, which runs them
 const GAS = typeof google !== "undefined" && !!(google.script && google.script.run);
 const RELAY = !GAS && /[?&]relay=1/.test(location.search);
-const APP_VERSION = "v94dc2dbfa5"; // stamped by appsscript/build.mjs
+const APP_VERSION = "v7b0ecb84f3"; // stamped by appsscript/build.mjs
 // The version in the address makes phones load a fresh copy instead of GitHub's 10-minute cache.
 const VOICE_PAGE = "https://bryantholt.github.io/myyield-sales-coach/?relay=1&v=" + APP_VERSION;
 const VOICE_ORIGIN = "https://bryantholt.github.io";
@@ -1459,7 +1459,7 @@ function renderUnit(k){
       <button class="uback" id="unit-guide">${icon("book")}<span>Unit guide</span></button></div><div class="unit">
       <div class="eyebrow">${unitKicker(u, k)}</div><h2>${esc(u.short || u.title)}</h2><div class="udesc">${esc(u.subtitle)}</div>
       <div class="prog"><span style="width:${(p.done / p.total) * 100}%"></span></div><div class="art">${Art.field}</div></div></div>
-    ${heard ? "" : `<button class="guidecard" id="guide-card"><span class="gic">${icon("mic")}</span><span><b>New to this play? Start here.</b><small>Listen to the ${guideMinutes(u)}-minute unit guide: what it is, who it's for, and how to pitch it.</small></span></button>`}
+    ${heard ? "" : `<button class="guidecard" id="guide-card"><span class="gic">${icon("mic")}</span><span><b>New to this unit? Start here.</b><small>Listen to the ${guideMinutes(u)}-minute unit guide: the big ideas and how to use them on a call.</small></span></button>`}
     <div class="path"></div>`;
   $("all-units").onclick = () => { renderUnitList(); window.scrollTo(0, 0); };
   $("unit-guide").onclick = () => openGuide(k);
@@ -1605,7 +1605,7 @@ function personaCards(el, options, key){
   if (!options.some((o) => o.id === state[key])) state[key] = options[0].id;
   for (const o of options){
     const b = document.createElement("button"); b.className = "persona"; b.type = "button";
-    b.innerHTML = `<span class="pe" aria-hidden="true">${esc(o.emoji || "")}</span><span class="pt"><b>${esc(o.label)}</b>${o.quote ? `<i>“${esc(o.quote)}”</i>` : ""}${o.wants ? `<small>Wins him over: ${esc(o.wants)}</small>` : ""}</span><span class="pc" aria-hidden="true">${icon("check")}</span>`;
+    b.innerHTML = `<span class="pe" aria-hidden="true">${esc(o.emoji || "")}</span><span class="pt"><b>${esc(o.label)}</b>${o.quote ? `<i>“${esc(o.quote)}”</i>` : ""}${o.wants ? `<small>Win him over with: ${esc(o.wants)}</small>` : ""}</span><span class="pc" aria-hidden="true">${icon("check")}</span>`;
     b.setAttribute("aria-pressed", String(state[key] === o.id));
     b.onclick = () => { state[key] = o.id; for (const c of el.children) c.setAttribute("aria-pressed", String(c === b)); };
     el.appendChild(b);
@@ -1617,7 +1617,7 @@ function renderPractice({ farmers, toughness, plays }){
   const people = () => {
     const dealer = (state.plays || []).some((p) => p.id === state.callPlay && p.dealer);
     const list = farmers.filter((f) => !!f.dealer === dealer);
-    personaCards($("farmers"), dealer ? list : [{ id:"surprise", label:"Surprise me", emoji:"🎲", quote:"Any of the five, like a real day of calls." }, ...list], "farmerId");
+    personaCards($("farmers"), dealer ? list : [{ id:"surprise", label:"Surprise me", emoji:"🎲", quote:"One of the five below, picked at random, like a real day of calls." }, ...list], "farmerId");
   };
   if (state.plays) pills($("plays"), state.plays.map((p) => ({ id: p.id, label: p.short })), "callPlay");
   $("plays").onclick = people;
@@ -1626,7 +1626,7 @@ function renderPractice({ farmers, toughness, plays }){
   const s = state.me, pct = Math.min(1, s.weekCalls / s.weeklyGoal);
   $("goal-ring").setAttribute("stroke-dasharray", `${pct*94.2} 100`);
   $("goal-n").textContent = `${Math.min(s.weekCalls, s.weeklyGoal)}/${s.weeklyGoal}`;
-  $("goal-text").textContent = s.weekCalls >= s.weeklyGoal ? "Goal hit this week. Nice work." : `${s.weeklyGoal - s.weekCalls} more lessons or calls this week.`;
+  $("goal-text").textContent = s.weekCalls >= s.weeklyGoal ? "Goal hit this week. Nice work." : `${s.weeklyGoal - s.weekCalls} more ${s.weeklyGoal - s.weekCalls === 1 ? "lesson or call" : "lessons or calls"} to hit it this week.`;
 }
 
 const MEDAL = ["#F9CD37","#AEB4BD","#C98B5B"];
@@ -1659,7 +1659,7 @@ function badgeTiles(el, badges, fresh=[]){
 function renderMe(){
   const s = state.me;
   $("me-name").textContent = state.name;
-  $("me-sub").textContent = s.weekRank ? `#${s.weekRank} on this week's leaderboard` : "Finish a lesson to get on the board.";
+  $("me-sub").textContent = s.weekRank ? `#${s.weekRank} on this week's leaderboard` : "Practice this week to get on the leaderboard.";
   const stat = (ic, color, v, l) => `<div class="stat"><svg class="i" style="color:${color};width:28px;height:28px"><use href="#i-${ic}"/></svg><div><b>${v}</b><small>${l}</small></div></div>`;
   $("me-stats").innerHTML = stat("flame","var(--gold-d)",s.streak,"Day streak") + stat("bolt","var(--blue)",s.points,"Total points")
     + stat("book","var(--ok)",s.lessonsDone,"Lessons") + stat("phone","var(--blue)",s.calls,"Practice calls")
@@ -1867,11 +1867,11 @@ function renderExerciseBody(){
 function sceneCard(sc, big){
   if (!sc) return "";
   const f = (ic, t) => `<li>${icon(ic)}<span>${esc(t)}</span></li>`;
-  return `<div class="scene">${Art.farmer(sc.name, big ? 84 : 64)}<div><div class="kicker" style="margin:0">Your grower</div><div class="who">${esc(sc.name)}</div><ul class="facts">
+  return `<div class="scene">${Art.farmer(sc.name, big ? 84 : 64)}<div><div class="kicker" style="margin:0">${sc.growers ? "Your dealer" : "Your grower"}</div><div class="who">${esc(sc.name)}</div><ul class="facts">
     ${f("pin", sc.place)}${f("grid", sc.growers ? `Serves about ${sc.growers} growers` : Number(sc.acres).toLocaleString("en-US") + " acres")}${f("sprout", sc.crops)}${f("mega", sc.lead)}${f("home", "Talking " + sc.setting)}</ul></div></div>`;
 }
 
-const CHEERS = { 3: "3 in a row!", 5: "5 in a row! You're on fire.", 8: "8 in a row!", 10: "10 in a row! Gabe would be proud.", 15: "15 in a row!" };
+const CHEERS = { 3: "3 in a row!", 5: "5 in a row! You're on fire.", 8: "8 in a row!", 10: "10 in a row! That's top-rep stuff.", 15: "15 in a row!" };
 function feedback(good, title, html){
   if (good && L && CHEERS[L.combo]) title = CHEERS[L.combo];
   if (!good && L && L.review) title = "Not quite. Give it another try.";
@@ -1959,7 +1959,7 @@ async function getBriefing(){
     $("brief-kicker").textContent = (state.checkpoint ? "Checkpoint call · score 70+ to pass · " : "") + (r.play ? r.play.name : "Your call");
     $("brief-name").innerHTML = "";
     $("brief-text").innerHTML = sceneCard(r.scene, true) + `<p style="margin:6px 0 0">${esc(r.briefing)}</p>`;
-    $("brief-tough").textContent = `He'll be ${r.toughness}. Say "coach me" any time for a quick tip.`;
+    $("brief-tough").textContent = `How tough: ${r.toughness}. Say "coach me" any time for a quick tip.`;
     show("s-brief"); say(r.briefing, "coach");
   } catch (e) { $("setup-err").textContent = e.message; }
 }
@@ -2357,7 +2357,7 @@ function renderResults({ overall, grade, game, transcript, scene, at, checkpoint
     if (game.newBest) rw.push(`<span class="pill" style="border-color:var(--ok);color:var(--ok-d)">New personal best</span>`);
     if (game.weekRank) rw.push(`<span class="pill">#${game.weekRank} this week</span>`);
     if (game.unitComplete) rw.push(`<span class="pill" style="border-color:var(--gold);background:var(--gold-50)">🏆 ${esc(game.unitName || "Unit")} complete</span>`);
-  } else if (game && !review) rw.push(`<span class="pill">Calls need 4+ real answers to earn points</span>`);
+  } else if (game && !review) rw.push(`<span class="pill">Too short to earn points: calls need 4+ real answers</span>`);
   if (review && points) rw.push(`<span class="pill" style="border-color:var(--gold);background:var(--gold-50);color:var(--gold-ink)">⚡ +${points} points</span>`);
   $("res-reward").innerHTML = rw.join("");
   badgeTiles($("res-badges"), (game?.newBadges||[]).map((b)=>({...b,earned:true})), (game?.newBadges||[]).map((b)=>b.id));
