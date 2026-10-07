@@ -971,7 +971,7 @@ function show(id){
 // - on the voice page (?relay=1, opened from Apps Script so the mic works): messages to the Apps Script tab, which runs them
 const GAS = typeof google !== "undefined" && !!(google.script && google.script.run);
 const RELAY = !GAS && /[?&]relay=1/.test(location.search);
-const APP_VERSION = "v7b0ecb84f3"; // stamped by appsscript/build.mjs
+const APP_VERSION = "v9adb1ed21b"; // stamped by appsscript/build.mjs
 // The version in the address makes phones load a fresh copy instead of GitHub's 10-minute cache.
 const VOICE_PAGE = "https://bryantholt.github.io/myyield-sales-coach/?relay=1&v=" + APP_VERSION;
 const VOICE_ORIGIN = "https://bryantholt.github.io";
@@ -982,7 +982,7 @@ function serverErrorText(err){
   const m = String((err && (err.message || err)) || "");
   if (/PERMISSION_DENIED|unable to open|signed in to (more than one|multiple)|authuser|ScriptError.*(permission|authoriz)/i.test(m))
     return "Google got confused about which account you're using. Open your Sales Coach link in a window signed in only to your My Yield work account (or a private/incognito window).";
-  if (/authoriz/i.test(m)) return "The Sales Coach needs to be re-approved by Bryant. Tell him you saw this.";
+  if (/authoriz/i.test(m)) return "The Sales Coach needs to be re-approved by an admin. Let your admin know you saw this.";
   if (/too many times|quota|invoked too many/i.test(m)) return "Practice is paused for a bit (too much at once). Try again in a few minutes.";
   if (/timed out|exceeded maximum execution time/i.test(m)) return "The coach took too long. Try again.";
   if (/NetworkError|network|Failed to fetch|disconnected/i.test(m)) return "Couldn't reach the coach. Check your connection and try again.";
@@ -1746,7 +1746,7 @@ $("report-cancel").onclick = () => { $("report-sheet").hidden = true; };
 $("report-send").onclick = async () => {
   const note = $("report-note").value.trim(); if (!note) return $("report-note").focus();
   $("report-send").disabled = true;
-  try { await api("/api/problem", { note, ...reportDetails() }); $("report-sheet").hidden = true; toast("Thanks. Sent to Bryant and the sales leaders."); }
+  try { await api("/api/problem", { note, ...reportDetails() }); $("report-sheet").hidden = true; toast("Thanks. Sent to the Sales Coach team."); }
   catch (e) { toast(e.message); }
   finally { $("report-send").disabled = false; }
 };
