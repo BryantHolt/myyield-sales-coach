@@ -971,7 +971,7 @@ function show(id){
 // - on the voice page (?relay=1, opened from Apps Script so the mic works): messages to the Apps Script tab, which runs them
 const GAS = typeof google !== "undefined" && !!(google.script && google.script.run);
 const RELAY = !GAS && /[?&]relay=1/.test(location.search);
-const APP_VERSION = "v3a8c710f78"; // stamped by appsscript/build.mjs
+const APP_VERSION = "v94dc2dbfa5"; // stamped by appsscript/build.mjs
 // The version in the address makes phones load a fresh copy instead of GitHub's 10-minute cache.
 const VOICE_PAGE = "https://bryantholt.github.io/myyield-sales-coach/?relay=1&v=" + APP_VERSION;
 const VOICE_ORIGIN = "https://bryantholt.github.io";
@@ -1613,8 +1613,15 @@ function personaCards(el, options, key){
 }
 function renderPractice({ farmers, toughness, plays }){
   if (!state.callPlay) state.callPlay = "play1";
-  if (plays) pills($("plays"), plays.map((p) => ({ id: p.id, label: p.short })), "callPlay");
-  personaCards($("farmers"), [{ id:"surprise", label:"Surprise me", emoji:"🎲", quote:"Any of the five, like a real day of calls." }, ...farmers], "farmerId");
+  if (plays) state.plays = plays;
+  const people = () => {
+    const dealer = (state.plays || []).some((p) => p.id === state.callPlay && p.dealer);
+    const list = farmers.filter((f) => !!f.dealer === dealer);
+    personaCards($("farmers"), dealer ? list : [{ id:"surprise", label:"Surprise me", emoji:"🎲", quote:"Any of the five, like a real day of calls." }, ...list], "farmerId");
+  };
+  if (state.plays) pills($("plays"), state.plays.map((p) => ({ id: p.id, label: p.short })), "callPlay");
+  $("plays").onclick = people;
+  people();
   pills($("tough"), toughness.map((t)=>({ id:t, label:t[0].toUpperCase()+t.slice(1) })), "toughness");
   const s = state.me, pct = Math.min(1, s.weekCalls / s.weeklyGoal);
   $("goal-ring").setAttribute("stroke-dasharray", `${pct*94.2} 100`);
