@@ -971,7 +971,7 @@ function show(id){
 // - on the voice page (?relay=1, opened from Apps Script so the mic works): messages to the Apps Script tab, which runs them
 const GAS = typeof google !== "undefined" && !!(google.script && google.script.run);
 const RELAY = !GAS && /[?&]relay=1/.test(location.search);
-const APP_VERSION = "va1a09b351b"; // stamped by appsscript/build.mjs
+const APP_VERSION = "v8e06a54311"; // stamped by appsscript/build.mjs
 // The version in the address makes phones load a fresh copy instead of GitHub's 10-minute cache.
 const VOICE_PAGE = "https://bryantholt.github.io/myyield-sales-coach/?relay=1&v=" + APP_VERSION;
 const VOICE_ORIGIN = "https://bryantholt.github.io";
@@ -1935,7 +1935,7 @@ async function finishLesson(){
   setCheck("Saving…", false);
   try {
     L.saveId = L.saveId || newId();
-    const r = await api("/api/lesson", { lessonId: L.lesson.id, results: L.results, answers: L.answers, saveId: L.saveId });
+    const r = await api("/api/lesson", { lessonId: L.lesson.id, results: L.results, answers: L.answers, saveId: L.saveId, v: APP_VERSION });
     state.path = r.path; state.lastLessonId = r.id; $("done-review").hidden = !r.id;
     store.del(progressKey(L.lesson.id));
     $("done-title").textContent = r.stars === 3 ? "Perfect lesson!" : "Lesson complete!";
